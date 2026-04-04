@@ -23,7 +23,7 @@ st.caption("Win + First to Five | ~59-60% true accuracy | Calibrated probabiliti
 # CONSTANTS
 # =================================================================
 WIN_DATA = 'proplay_matches.csv'
-FT5_DATA = r'C:\Users\Alex\Desktop\ft5 model\kill_timelines.csv'
+FT5_DATA = 'kill_timelines.csv'
 FORM_WINDOW = 5
 BLUE_SIDE_WINRATE = 0.5312
 ODDS_AVOID = 1.60
@@ -101,26 +101,18 @@ def load_and_train():
     win_df['form_diff'] = win_df['blue_form'] - win_df['red_form']
     win_df['blue_side_advantage'] = BLUE_SIDE_WINRATE
 
-    win_mlb = MultiLabelBinarizer()
-    win_mlb.fit(win_df['blue_picks'] + win_df['red_picks'])
-    win_blue_enc = pd.DataFrame(win_mlb.transform(win_df['blue_picks']),
-        columns=['blue_' + c for c in win_mlb.classes_]).reset_index(drop=True)
-    win_red_enc = pd.DataFrame(win_mlb.transform(win_df['red_picks']),
-        columns=['red_' + c for c in win_mlb.classes_]).reset_index(drop=True)
-    win_extra = win_df[[
-        'blue_team_winrate', 'red_team_winrate', 'team_winrate_diff',
-        'blue_team_games', 'red_team_games',
-        'blue_avg_winrate', 'red_avg_winrate', 'winrate_diff',
-        'h2h_winrate' if 'h2h_winrate' in win_df.columns else 'blue_form',
-        'blue_form', 'red_form', 'form_diff', 'blue_side_advantage',
-    ]].reset_index(drop=True)
-
     win_df['h2h_winrate'] = win_df.apply(
         lambda row: (win_h2h.get(tuple(sorted([row['blue_team'], row['red_team']])), {})
                      .get(row['blue_team'], 0)) /
                     max(sum(win_h2h.get(tuple(sorted([row['blue_team'],
                         row['red_team']])), {}).values()), 1), axis=1)
 
+    win_mlb = MultiLabelBinarizer()
+    win_mlb.fit(win_df['blue_picks'] + win_df['red_picks'])
+    win_blue_enc = pd.DataFrame(win_mlb.transform(win_df['blue_picks']),
+        columns=['blue_' + c for c in win_mlb.classes_]).reset_index(drop=True)
+    win_red_enc = pd.DataFrame(win_mlb.transform(win_df['red_picks']),
+        columns=['red_' + c for c in win_mlb.classes_]).reset_index(drop=True)
     win_extra = win_df[[
         'blue_team_winrate', 'red_team_winrate', 'team_winrate_diff',
         'blue_team_games', 'red_team_games',
@@ -531,4 +523,3 @@ if predict_btn:
 
         st.divider()
         st.caption("~59-60% true accuracy | Skip <1.60 odds | Best value at 2.30+ odds")
-        
