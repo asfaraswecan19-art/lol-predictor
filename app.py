@@ -260,6 +260,9 @@ st.success("Models ready!")
 # =================================================================
 # HELPER FUNCTIONS
 # =================================================================
+def fix_apostrophes(text):
+    return text.replace("'", "\u2019").replace("`", "\u2019")
+
 def get_h2h_rate(h2h_dict, blue, red):
     matchup = tuple(sorted([blue, red]))
     if matchup not in h2h_dict:
@@ -346,8 +349,8 @@ if predict_btn:
     if not blue_team or not red_team or not blue_picks_input or not red_picks_input:
         st.error("Please fill in all team names and picks!")
     else:
-        blue = [c.strip() for c in blue_picks_input.split(',')]
-        red  = [c.strip() for c in red_picks_input.split(',')]
+        blue = [fix_apostrophes(c.strip()) for c in blue_picks_input.split(',')]
+        red  = [fix_apostrophes(c.strip()) for c in red_picks_input.split(',')]
 
         unknown = [c for c in blue + red
                    if c not in win_champ_rate and c not in champ_aggression]
