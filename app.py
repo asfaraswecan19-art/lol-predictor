@@ -261,7 +261,7 @@ st.success("Models ready!")
 # HELPER FUNCTIONS
 # =================================================================
 def fix_apostrophes(text):
-    return text.replace("'", "\u2019").replace("`", "\u2019")
+            return text.replace("\u2019", "'").replace("\u2018", "'").replace("`", "'")
 
 def get_h2h_rate(h2h_dict, blue, red):
     matchup = tuple(sorted([blue, red]))
