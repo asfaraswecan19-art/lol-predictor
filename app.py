@@ -29,13 +29,10 @@ BLUE_SIDE_WINRATE = 0.5312
 ODDS_AVOID = 1.60
 
 # =================================================================
-# LOAD AND TRAIN (cached so it only runs once per session)
+# LOAD AND TRAIN
 # =================================================================
 @st.cache_resource
 def load_and_train():
-    # -----------------------------------------------
-    # WIN MODEL
-    # -----------------------------------------------
     win_df = pd.read_csv(WIN_DATA)
     win_df['blue_picks'] = win_df['blue_picks'].apply(lambda x: x.split(','))
     win_df['red_picks'] = win_df['red_picks'].apply(lambda x: x.split(','))
@@ -129,9 +126,7 @@ def load_and_train():
     win_model = CalibratedClassifierCV(win_base, method='isotonic', cv=5)
     win_model.fit(win_X_train, win_y_train)
 
-    # -----------------------------------------------
     # FT5 MODEL
-    # -----------------------------------------------
     ft5_df = pd.read_csv(FT5_DATA)
     ft5_df = ft5_df[ft5_df['tournament'] != 'LPL'].copy().reset_index(drop=True)
     ft5_df['blue_picks'] = ft5_df['blue_picks'].apply(lambda x: x.split(','))
@@ -241,10 +236,18 @@ def load_and_train():
     ft5_model = CalibratedClassifierCV(ft5_base, method='isotonic', cv=5)
     ft5_model.fit(ft5_X_train, ft5_y_train)
 
+    # Build dropdown lists
+    all_teams = sorted(set(
+        win_df['blue_team'].tolist() + win_df['red_team'].tolist()))
+    all_champs = sorted(set(
+        [c for picks in win_df['blue_picks'] for c in picks] +
+        [c for picks in win_df['red_picks'] for c in picks]))
+
     return (win_model, win_mlb, win_team_rate, win_team_games, win_champ_rate,
             win_h2h, win_team_recent,
             ft5_model, ft5_mlb, champ_aggression, team_early_rate,
-            team_kill_speed, ft5_h2h, ft5_team_recent)
+            team_kill_speed, ft5_h2h, ft5_team_recent,
+            all_teams, all_champs)
 
 # =================================================================
 # LOAD MODELS
@@ -253,16 +256,14 @@ with st.spinner("Training models... (~30 seconds on first load)"):
     (win_model, win_mlb, win_team_rate, win_team_games, win_champ_rate,
      win_h2h, win_team_recent,
      ft5_model, ft5_mlb, champ_aggression, team_early_rate,
-     team_kill_speed, ft5_h2h, ft5_team_recent) = load_and_train()
+     team_kill_speed, ft5_h2h, ft5_team_recent,
+     all_teams, all_champs) = load_and_train()
 
 st.success("Models ready!")
 
 # =================================================================
 # HELPER FUNCTIONS
 # =================================================================
-def fix_apostrophes(text):
-            return text.replace("\u2019", "'").replace("\u2018", "'").replace("`", "'")
-
 def get_h2h_rate(h2h_dict, blue, red):
     matchup = tuple(sorted([blue, red]))
     if matchup not in h2h_dict:
@@ -307,7 +308,7 @@ def calc_edge(conf, odds):
     return edge, units, label, implied
 
 # =================================================================
-# INPUT FORM
+# INPUT FORM — DROPDOWNS
 # =================================================================
 st.divider()
 
@@ -315,29 +316,37 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.markdown("### 🔵 Blue Side")
-    blue_team = st.text_input("Team name", key="blue_team", placeholder="e.g. T1")
-    blue_picks_input = st.text_input("Picks (Top,JG,Mid,ADC,Sup)", key="blue_picks",
-                                      placeholder="e.g. Jayce,Vi,Azir,Jinx,Thresh")
+    blue_team = st.selectbox("Team", options=all_teams, key="blue_team",
+                              index=0, placeholder="Search team...")
+    blue_top  = st.selectbox("Top",     options=all_champs, key="bt", index=0)
+    blue_jg   = st.selectbox("Jungle",  options=all_champs, key="bj", index=0)
+    blue_mid  = st.selectbox("Mid",     options=all_champs, key="bm", index=0)
+    blue_adc  = st.selectbox("ADC",     options=all_champs, key="ba", index=0)
+    blue_sup  = st.selectbox("Support", options=all_champs, key="bs", index=0)
 
 with col2:
     st.markdown("### 🔴 Red Side")
-    red_team = st.text_input("Team name", key="red_team", placeholder="e.g. Gen.G")
-    red_picks_input = st.text_input("Picks (Top,JG,Mid,ADC,Sup)", key="red_picks",
-                                     placeholder="e.g. Garen,Lee Sin,Orianna,Caitlyn,Lulu")
+    red_team = st.selectbox("Team", options=all_teams, key="red_team",
+                             index=1, placeholder="Search team...")
+    red_top  = st.selectbox("Top",     options=all_champs, key="rt", index=0)
+    red_jg   = st.selectbox("Jungle",  options=all_champs, key="rj", index=0)
+    red_mid  = st.selectbox("Mid",     options=all_champs, key="rm", index=0)
+    red_adc  = st.selectbox("ADC",     options=all_champs, key="ra", index=0)
+    red_sup  = st.selectbox("Support", options=all_champs, key="rs", index=0)
 
 st.markdown("### 📊 Odds")
 col3, col4 = st.columns(2)
 with col3:
     st.markdown("**Match Winner**")
-    win_blue_odds = st.number_input(f"Blue odds", min_value=1.01, max_value=10.0,
+    win_blue_odds = st.number_input("Blue odds", min_value=1.01, max_value=10.0,
                                      value=1.85, step=0.05, key="wbo")
-    win_red_odds  = st.number_input(f"Red odds",  min_value=1.01, max_value=10.0,
+    win_red_odds  = st.number_input("Red odds",  min_value=1.01, max_value=10.0,
                                      value=1.95, step=0.05, key="wro")
 with col4:
     st.markdown("**First to Five**")
-    ft5_blue_odds = st.number_input(f"Blue odds", min_value=1.01, max_value=10.0,
+    ft5_blue_odds = st.number_input("Blue odds", min_value=1.01, max_value=10.0,
                                      value=1.85, step=0.05, key="fbo")
-    ft5_red_odds  = st.number_input(f"Red odds",  min_value=1.01, max_value=10.0,
+    ft5_red_odds  = st.number_input("Red odds",  min_value=1.01, max_value=10.0,
                                      value=1.95, step=0.05, key="fro")
 
 predict_btn = st.button("🔮 Predict", type="primary", use_container_width=True)
@@ -346,22 +355,20 @@ predict_btn = st.button("🔮 Predict", type="primary", use_container_width=True
 # PREDICTION
 # =================================================================
 if predict_btn:
-    if not blue_team or not red_team or not blue_picks_input or not red_picks_input:
-        st.error("Please fill in all team names and picks!")
-    else:
-        blue = [fix_apostrophes(c.strip()) for c in blue_picks_input.split(',')]
-        red  = [fix_apostrophes(c.strip()) for c in red_picks_input.split(',')]
+    blue = [blue_top, blue_jg, blue_mid, blue_adc, blue_sup]
+    red  = [red_top,  red_jg,  red_mid,  red_adc,  red_sup]
 
-        unknown = [c for c in blue + red
-                   if c not in win_champ_rate and c not in champ_aggression]
-        if unknown:
-            st.warning(f"Unknown champions (using defaults): {', '.join(set(unknown))}")
+    if blue_team == red_team:
+        st.error("Blue and red team can't be the same!")
+    elif len(set(blue + red)) < 10:
+        st.error("Each champion must be unique across both teams!")
+    else:
         if blue_team not in win_team_rate:
             st.warning(f"{blue_team} not in dataset — using defaults")
         if red_team not in win_team_rate:
             st.warning(f"{red_team} not in dataset — using defaults")
 
-        # Win model prediction
+        # Win model
         b_win_enc = pd.DataFrame(win_mlb.transform([blue]),
             columns=['blue_' + c for c in win_mlb.classes_])
         r_win_enc = pd.DataFrame(win_mlb.transform([red]),
@@ -393,7 +400,7 @@ if predict_btn:
         blue_win_conf = win_prob[1]
         red_win_conf  = win_prob[0]
 
-        # FT5 model prediction
+        # FT5 model
         b_ft5_enc = pd.DataFrame(ft5_mlb.transform([blue]),
             columns=['blue_' + c for c in ft5_mlb.classes_])
         r_ft5_enc = pd.DataFrame(ft5_mlb.transform([red]),
@@ -439,71 +446,59 @@ if predict_btn:
 
         st.divider()
 
-        # -----------------------------------------------
-        # TEAM STATS
-        # -----------------------------------------------
+        # Team stats
         st.markdown("### 📋 Team Stats")
-        stats_col1, stats_col2 = st.columns(2)
-        with stats_col1:
+        sc1, sc2 = st.columns(2)
+        with sc1:
             st.markdown(f"**🔵 {blue_team}**")
             st.write(f"Win rate: {b_wr*100:.1f}%")
             st.write(f"Form (L5): {b_form*100:.0f}%")
             st.write(f"Early game rate: {b_early*100:.1f}%")
             st.write(f"Avg kill time: {b_speed:.1f} min")
-        with stats_col2:
+        with sc2:
             st.markdown(f"**🔴 {red_team}**")
             st.write(f"Win rate: {r_wr*100:.1f}%")
             st.write(f"Form (L5): {r_form*100:.0f}%")
             st.write(f"Early game rate: {r_early*100:.1f}%")
             st.write(f"Avg kill time: {r_speed:.1f} min")
 
-        h2h_col1, h2h_col2 = st.columns(2)
-        with h2h_col1:
+        hc1, hc2 = st.columns(2)
+        with hc1:
             st.write(f"Win H2H: {blue_team} {b_win_h2h} — {r_win_h2h} {red_team}")
-        with h2h_col2:
+        with hc2:
             st.write(f"Early H2H: {blue_team} {b_ft5_h2h} — {r_ft5_h2h} {red_team}")
 
         st.divider()
 
-        # -----------------------------------------------
-        # MATCH WINNER
-        # -----------------------------------------------
+        # Match winner
         st.markdown("### 🏆 Match Winner")
-
         win_winner = blue_team if blue_win_conf > red_win_conf else red_team
-        win_conf_display = max(blue_win_conf, red_win_conf)
         winner_color = "🔵" if blue_win_conf > red_win_conf else "🔴"
-        st.markdown(f"#### {winner_color} Model pick: **{win_winner}** ({win_conf_display*100:.1f}%)")
+        st.markdown(f"#### {winner_color} Model pick: **{win_winner}** ({max(blue_win_conf, red_win_conf)*100:.1f}%)")
 
         wc1, wc2 = st.columns(2)
         with wc1:
             st.metric(f"🔵 {blue_team}", f"{blue_win_conf*100:.1f}%",
                       delta=f"Edge: {win_blue_edge*100:.1f}%")
             st.write(f"Odds: {win_blue_odds} | Implied: {win_blue_impl*100:.1f}%")
-            st.write(f"{odds_label(win_blue_odds)}")
+            st.write(odds_label(win_blue_odds))
             if blue_win_conf > red_win_conf:
-                st.info(f"💰 {win_blue_units}u — {win_blue_label}" if win_blue_units > 0
-                        else "💰 ⛔ SKIP")
+                st.info(f"💰 {win_blue_units}u — {win_blue_label}" if win_blue_units > 0 else "💰 ⛔ SKIP")
         with wc2:
             st.metric(f"🔴 {red_team}", f"{red_win_conf*100:.1f}%",
                       delta=f"Edge: {win_red_edge*100:.1f}%")
             st.write(f"Odds: {win_red_odds} | Implied: {win_red_impl*100:.1f}%")
-            st.write(f"{odds_label(win_red_odds)}")
+            st.write(odds_label(win_red_odds))
             if red_win_conf > blue_win_conf:
-                st.info(f"💰 {win_red_units}u — {win_red_label}" if win_red_units > 0
-                        else "💰 ⛔ SKIP")
+                st.info(f"💰 {win_red_units}u — {win_red_label}" if win_red_units > 0 else "💰 ⛔ SKIP")
 
         st.divider()
 
-        # -----------------------------------------------
-        # FIRST TO FIVE
-        # -----------------------------------------------
+        # First to five
         st.markdown("### ⚔️ First to Five Kills")
-
         ft5_winner = blue_team if blue_ft5_conf > red_ft5_conf else red_team
-        ft5_conf_display = max(blue_ft5_conf, red_ft5_conf)
         ft5_color = "🔵" if blue_ft5_conf > red_ft5_conf else "🔴"
-        st.markdown(f"#### {ft5_color} Model pick: **{ft5_winner}** ({ft5_conf_display*100:.1f}%)")
+        st.markdown(f"#### {ft5_color} Model pick: **{ft5_winner}** ({max(blue_ft5_conf, red_ft5_conf)*100:.1f}%)")
         st.caption(f"⏱️ Est. 5 kills at ~minute {est_time:.1f} ({faster_team} historically faster)")
 
         fc1, fc2 = st.columns(2)
@@ -511,18 +506,16 @@ if predict_btn:
             st.metric(f"🔵 {blue_team}", f"{blue_ft5_conf*100:.1f}%",
                       delta=f"Edge: {ft5_blue_edge*100:.1f}%")
             st.write(f"Odds: {ft5_blue_odds} | Implied: {ft5_blue_impl*100:.1f}%")
-            st.write(f"{odds_label(ft5_blue_odds)}")
+            st.write(odds_label(ft5_blue_odds))
             if blue_ft5_conf > red_ft5_conf:
-                st.info(f"💰 {ft5_blue_units}u — {ft5_blue_label}" if ft5_blue_units > 0
-                        else "💰 ⛔ SKIP")
+                st.info(f"💰 {ft5_blue_units}u — {ft5_blue_label}" if ft5_blue_units > 0 else "💰 ⛔ SKIP")
         with fc2:
             st.metric(f"🔴 {red_team}", f"{red_ft5_conf*100:.1f}%",
                       delta=f"Edge: {ft5_red_edge*100:.1f}%")
             st.write(f"Odds: {ft5_red_odds} | Implied: {ft5_red_impl*100:.1f}%")
-            st.write(f"{odds_label(ft5_red_odds)}")
+            st.write(odds_label(ft5_red_odds))
             if red_ft5_conf > blue_ft5_conf:
-                st.info(f"💰 {ft5_red_units}u — {ft5_red_label}" if ft5_red_units > 0
-                        else "💰 ⛔ SKIP")
+                st.info(f"💰 {ft5_red_units}u — {ft5_red_label}" if ft5_red_units > 0 else "💰 ⛔ SKIP")
 
         st.divider()
         st.caption("~59-60% true accuracy | Skip <1.60 odds | Best value at 2.30+ odds")
