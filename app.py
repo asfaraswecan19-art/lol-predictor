@@ -111,23 +111,21 @@ def load_and_train():
     win_model = GradientBoostingClassifier().fit([[0]], [0])
     ft5_model = GradientBoostingClassifier().fit([[0]], [0])
 
-    return (
-        win_model, None, win_team_rate, win_team_games, None,
-        {}, {},
-        ft5_model, None, {}, team_early_rate,
-        {}, {}, {},
-        ft5_team_games,   # ✅ FIXED
-        list(win_team_games.keys()), []
-    )
+return (win_model, win_mlb, win_team_rate, win_team_games, win_champ_rate,
+        win_h2h, win_team_recent,
+        ft5_model, ft5_mlb, champ_aggression, team_early_rate,
+        team_kill_speed, ft5_h2h, ft5_team_recent,
+        ft5_team_games,   # ✅ THIS IS THE FIX
+        all_teams, all_champs)
 
 with st.spinner("Training models..."):
-    (win_model, win_mlb, win_team_rate, win_team_games, win_champ_rate,
-     win_h2h, win_team_recent,
-     ft5_model, ft5_mlb, champ_aggression, team_early_rate,
-     team_kill_speed, ft5_h2h, ft5_team_recent,
-     ft5_team_games,   # ✅ FIXED
-     all_teams, all_champs) = load_and_train()
-
+   (win_model, win_mlb, win_team_rate, win_team_games, win_champ_rate,
+ win_h2h, win_team_recent,
+ ft5_model, ft5_mlb, champ_aggression, team_early_rate,
+ team_kill_speed, ft5_h2h, ft5_team_recent,
+ ft5_team_games,   # ✅ THIS IS THE FIX
+ all_teams, all_champs) = load_and_train()
+  
 st.success("Models ready!")
 
 blue_team = st.selectbox("Blue Team", all_teams)
