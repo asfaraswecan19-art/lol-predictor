@@ -158,7 +158,7 @@ def load_and_train():
         win_team_recent[blue].append(1 if row['blue_win'] == 1 else 0)
         win_team_recent[red].append(0  if row['blue_win'] == 1 else 1)
     win_df = win_df_sorted
-    win_df['form_diff']          = win_df['blue_form'] - win_df['red_form']
+    win_df['form_diff']           = win_df['blue_form'] - win_df['red_form']
     win_df['blue_side_advantage'] = BLUE_SIDE_WINRATE
 
     win_df['h2h_winrate'] = win_df.apply(
@@ -229,7 +229,7 @@ def load_and_train():
     ft5_df['red_early_rate']  = ft5_df['red_team'].map(team_early_rate)
     ft5_df['early_rate_diff'] = ft5_df['blue_early_rate'] - ft5_df['red_early_rate']
 
-    ft5_avg_time   = {}
+    ft5_avg_time    = {}
     ft5_time_counts = {}
     for _, row in ft5_df.iterrows():
         blue, red = row['blue_team'], row['red_team']
@@ -308,6 +308,7 @@ def load_and_train():
             win_h2h, win_team_recent,
             ft5_model, ft5_mlb, champ_aggression, team_early_rate,
             team_kill_speed, ft5_h2h, ft5_team_recent,
+            ft5_team_games,
             all_teams, all_champs)
 
 # =================================================================
@@ -318,6 +319,7 @@ with st.spinner("Training models... (~30 seconds on first load)"):
      win_h2h, win_team_recent,
      ft5_model, ft5_mlb, champ_aggression, team_early_rate,
      team_kill_speed, ft5_h2h, ft5_team_recent,
+     ft5_team_games,
      all_teams, all_champs) = load_and_train()
 
 st.success("Models ready!")
@@ -373,21 +375,21 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.markdown("### 🔵 Blue Side")
-    blue_team   = st.selectbox("Team", options=all_teams, key="blue_team", index=0)
-    blue_top    = st.selectbox("Top",     options=all_champs, key="bt", index=0)
-    blue_jg     = st.selectbox("Jungle",  options=all_champs, key="bj", index=0)
-    blue_mid    = st.selectbox("Mid",     options=all_champs, key="bm", index=0)
-    blue_adc    = st.selectbox("ADC",     options=all_champs, key="ba", index=0)
-    blue_sup    = st.selectbox("Support", options=all_champs, key="bs", index=0)
+    blue_team = st.selectbox("Team", options=all_teams, key="blue_team", index=0)
+    blue_top  = st.selectbox("Top",     options=all_champs, key="bt", index=0)
+    blue_jg   = st.selectbox("Jungle",  options=all_champs, key="bj", index=0)
+    blue_mid  = st.selectbox("Mid",     options=all_champs, key="bm", index=0)
+    blue_adc  = st.selectbox("ADC",     options=all_champs, key="ba", index=0)
+    blue_sup  = st.selectbox("Support", options=all_champs, key="bs", index=0)
 
 with col2:
     st.markdown("### 🔴 Red Side")
-    red_team    = st.selectbox("Team", options=all_teams, key="red_team", index=1)
-    red_top     = st.selectbox("Top",     options=all_champs, key="rt", index=0)
-    red_jg      = st.selectbox("Jungle",  options=all_champs, key="rj", index=0)
-    red_mid     = st.selectbox("Mid",     options=all_champs, key="rm", index=0)
-    red_adc     = st.selectbox("ADC",     options=all_champs, key="ra", index=0)
-    red_sup     = st.selectbox("Support", options=all_champs, key="rs", index=0)
+    red_team = st.selectbox("Team", options=all_teams, key="red_team", index=1)
+    red_top  = st.selectbox("Top",     options=all_champs, key="rt", index=0)
+    red_jg   = st.selectbox("Jungle",  options=all_champs, key="rj", index=0)
+    red_mid  = st.selectbox("Mid",     options=all_champs, key="rm", index=0)
+    red_adc  = st.selectbox("ADC",     options=all_champs, key="ra", index=0)
+    red_sup  = st.selectbox("Support", options=all_champs, key="rs", index=0)
 
 st.markdown("### 📊 Odds")
 col3, col4 = st.columns(2)
@@ -546,9 +548,7 @@ if predict_btn:
 
         st.divider()
 
-        # =================================================================
-        # MATCH WINNER
-        # =================================================================
+        # Match winner
         st.markdown("### 🏆 Match Winner")
         winner_color = "🔵" if blue_win_conf > red_win_conf else "🔴"
         st.markdown(f"#### {winner_color} Model pick: **{win_winner}**")
@@ -571,7 +571,6 @@ if predict_btn:
                 st.info(f"💰 {win_red_units}u — {win_red_label}" if win_red_units > 0
                         else "💰 ⛔ SKIP")
 
-        # Win model confidence
         st.markdown(f"**📊 Model confidence: {win_conf_level}** — {win_conf_desc}")
         for r in win_reasons:
             st.write(f"✔ {r}")
@@ -582,9 +581,7 @@ if predict_btn:
 
         st.divider()
 
-        # =================================================================
-        # FIRST TO FIVE
-        # =================================================================
+        # First to five
         st.markdown("### ⚔️ First to Five Kills")
         ft5_color = "🔵" if blue_ft5_conf > red_ft5_conf else "🔴"
         st.markdown(f"#### {ft5_color} Model pick: **{ft5_winner}**")
@@ -608,7 +605,6 @@ if predict_btn:
                 st.info(f"💰 {ft5_red_units}u — {ft5_red_label}" if ft5_red_units > 0
                         else "💰 ⛔ SKIP")
 
-        # FT5 model confidence
         st.markdown(f"**📊 Model confidence: {ft5_conf_level}** — {ft5_conf_desc}")
         for r in ft5_reasons:
             st.write(f"✔ {r}")
