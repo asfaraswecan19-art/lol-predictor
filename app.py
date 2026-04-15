@@ -8,9 +8,6 @@ from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import train_test_split
 
-# =================================================================
-# PAGE CONFIG
-# =================================================================
 st.set_page_config(
     page_title="LoL Match Predictor",
     page_icon="🎮",
@@ -20,15 +17,9 @@ st.set_page_config(
 st.title("🎮 LoL Pro Match Predictor")
 st.caption("Win + First to Five | ~61.88% true accuracy | Calibrated probabilities")
 
-# =================================================================
-# CONSTANTS
-# =================================================================
 FORM_WINDOW = 5
 BLUE_SIDE_WINRATE = 0.5312
 
-# =================================================================
-# HELPER RATINGS
-# =================================================================
 def rate_champ(win_rate, pc_rate):
     combined = (win_rate + pc_rate) / 2
     if combined >= 0.58:   return "🟢 Strong"
@@ -40,9 +31,6 @@ def rate_agg(agg_score):
     elif agg_score >= 0.48: return "🟡 Average aggression"
     else:                   return "🔴 Low aggression"
 
-# =================================================================
-# LOAD MODEL
-# =================================================================
 @st.cache_resource
 def load_models():
     with open('model_payload.pkl', 'rb') as f:
@@ -52,38 +40,35 @@ def load_models():
 with st.spinner("Loading models..."):
     p = load_models()
 
-win_model       = p['win_model']
-win_mlb         = p['win_mlb']
-win_team_rate   = p['win_team_rate']
-win_team_games  = p['win_team_games']
-win_champ_rate  = p['win_champ_rate']
-win_h2h         = p['win_h2h']
-win_team_recent = p['win_team_recent']
-pc_rate         = p['pc_rate']
-pc_games        = p['pc_games']
-ft5_model       = p['ft5_model']
-ft5_mlb         = p['ft5_mlb']
+win_model        = p['win_model']
+win_mlb          = p['win_mlb']
+win_team_rate    = p['win_team_rate']
+win_team_games   = p['win_team_games']
+win_champ_rate   = p['win_champ_rate']
+win_h2h          = p['win_h2h']
+win_team_recent  = p['win_team_recent']
+pc_rate          = p['pc_rate']
+pc_games         = p['pc_games']
+ft5_model        = p['ft5_model']
+ft5_mlb          = p['ft5_mlb']
 champ_aggression = p['champ_aggression']
-team_early_rate = p['team_early_rate']
-team_kill_speed = p['team_kill_speed']
-ft5_h2h         = p['ft5_h2h']
-ft5_team_recent = p['ft5_team_recent']
-ft5_team_games  = p['ft5_team_games']
-team_lineups    = p['team_lineups']
-all_teams       = p['all_teams']
-all_champs      = p['all_champs']
+team_early_rate  = p['team_early_rate']
+team_kill_speed  = p['team_kill_speed']
+ft5_h2h          = p['ft5_h2h']
+ft5_team_recent  = p['ft5_team_recent']
+ft5_team_games   = p['ft5_team_games']
+team_lineups     = p['team_lineups']
+all_teams        = p['all_teams']
+all_champs       = p['all_champs']
 
 st.success("Models ready!")
 
-# =================================================================
-# SESSION STATE INIT
-# =================================================================
 defaults = {
     'blue_team': None, 'red_team': None,
-    'blue_top': None,  'blue_jg': None,  'blue_mid': None,
-    'blue_adc': None,  'blue_sup': None,
-    'red_top':  None,  'red_jg':  None,  'red_mid':  None,
-    'red_adc':  None,  'red_sup': None,
+    'blue_top': None, 'blue_jg': None, 'blue_mid': None,
+    'blue_adc': None, 'blue_sup': None,
+    'red_top':  None, 'red_jg':  None, 'red_mid':  None,
+    'red_adc':  None, 'red_sup': None,
     'blue_p_top': '', 'blue_p_jg': '', 'blue_p_mid': '',
     'blue_p_adc': '', 'blue_p_sup': '',
     'red_p_top':  '', 'red_p_jg':  '', 'red_p_mid':  '',
@@ -93,9 +78,6 @@ for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
-# =================================================================
-# HELPERS
-# =================================================================
 def get_h2h_rate(h2h_dict, blue, red):
     matchup = tuple(sorted([blue, red]))
     if matchup not in h2h_dict: return 0.5
@@ -131,7 +113,7 @@ def calc_edge(conf, odds):
 
 def show_signal(label, b_val, r_val, low_t, high_t,
                 blue_name, red_name, fmt=".1f"):
-    diff    = b_val - r_val
+    diff     = b_val - r_val
     abs_diff = abs(diff)
     if abs_diff >= high_t:   strength = "🟢 Strong"
     elif abs_diff >= low_t:  strength = "🟡 Moderate"
@@ -142,7 +124,7 @@ def show_signal(label, b_val, r_val, low_t, high_t,
              f"🔴 {r_val*100:{fmt}}% — {strength} {direction}")
 
 # =================================================================
-# TEAM SELECTION + AUTO-FILL PLAYERS
+# UI
 # =================================================================
 st.divider()
 
@@ -173,9 +155,16 @@ with col1:
         key='blue_team')
     if blue_team and blue_team in team_lineups:
         lineup = team_lineups[blue_team]
-        for i, pos in enumerate(['top', 'jg', 'mid', 'adc', 'sup']):
-            if st.session_state[f'blue_p_{pos}'] == '':
-                st.session_state[f'blue_p_{pos}'] = lineup[i] if i < len(lineup) else ''
+        if st.session_state['blue_p_top'] == '':
+            st.session_state['blue_p_top'] = lineup.get('top', '')
+        if st.session_state['blue_p_jg'] == '':
+            st.session_state['blue_p_jg'] = lineup.get('jng', '')
+        if st.session_state['blue_p_mid'] == '':
+            st.session_state['blue_p_mid'] = lineup.get('mid', '')
+        if st.session_state['blue_p_adc'] == '':
+            st.session_state['blue_p_adc'] = lineup.get('adc', '')
+        if st.session_state['blue_p_sup'] == '':
+            st.session_state['blue_p_sup'] = lineup.get('sup', '')
 
     blue_top = st.selectbox("Top", options=[None] + all_champs,
         format_func=lambda x: "— select —" if x is None else x, key='blue_top')
@@ -201,9 +190,16 @@ with col2:
         key='red_team')
     if red_team and red_team in team_lineups:
         lineup = team_lineups[red_team]
-        for i, pos in enumerate(['top', 'jg', 'mid', 'adc', 'sup']):
-            if st.session_state[f'red_p_{pos}'] == '':
-                st.session_state[f'red_p_{pos}'] = lineup[i] if i < len(lineup) else ''
+        if st.session_state['red_p_top'] == '':
+            st.session_state['red_p_top'] = lineup.get('top', '')
+        if st.session_state['red_p_jg'] == '':
+            st.session_state['red_p_jg'] = lineup.get('jng', '')
+        if st.session_state['red_p_mid'] == '':
+            st.session_state['red_p_mid'] = lineup.get('mid', '')
+        if st.session_state['red_p_adc'] == '':
+            st.session_state['red_p_adc'] = lineup.get('adc', '')
+        if st.session_state['red_p_sup'] == '':
+            st.session_state['red_p_sup'] = lineup.get('sup', '')
 
     red_top  = st.selectbox("Top", options=[None] + all_champs,
         format_func=lambda x: "— select —" if x is None else x, key='red_top')
@@ -261,7 +257,6 @@ if predict_btn:
         if red_team not in win_team_rate:
             st.warning(f"{red_team} not in dataset — using defaults")
 
-        # Win features
         b_win_enc = pd.DataFrame(win_mlb.transform([blue]),
             columns=['blue_' + c for c in win_mlb.classes_])
         r_win_enc = pd.DataFrame(win_mlb.transform([red]),
@@ -303,7 +298,6 @@ if predict_btn:
         blue_win_conf = win_prob[1]
         red_win_conf  = win_prob[0]
 
-        # FT5 features
         b_ft5_enc = pd.DataFrame(ft5_mlb.transform([blue]),
             columns=['blue_' + c for c in ft5_mlb.classes_])
         r_ft5_enc = pd.DataFrame(ft5_mlb.transform([red]),
@@ -338,7 +332,6 @@ if predict_btn:
         blue_ft5_conf = ft5_prob[1]
         red_ft5_conf  = ft5_prob[0]
 
-        # Edges
         win_blue_edge, win_blue_units, win_blue_label, win_blue_impl = calc_edge(blue_win_conf, win_blue_odds)
         win_red_edge,  win_red_units,  win_red_label,  win_red_impl  = calc_edge(red_win_conf,  win_red_odds)
         ft5_blue_edge, ft5_blue_units, ft5_blue_label, ft5_blue_impl = calc_edge(blue_ft5_conf, ft5_blue_odds)
@@ -349,8 +342,6 @@ if predict_btn:
         faster_team = blue_team if b_speed < r_speed else red_team
         est_time    = (b_speed + r_speed) / 2
         positions   = ['Top', 'Jng', 'Mid', 'ADC', 'Sup']
-        b_win_h2h, r_win_h2h = get_h2h_record(win_h2h, blue_team, red_team)
-        b_ft5_h2h, r_ft5_h2h = get_h2h_record(ft5_h2h, blue_team, red_team)
 
         st.divider()
 
