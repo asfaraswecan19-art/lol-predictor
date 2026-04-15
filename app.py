@@ -4,7 +4,6 @@ import streamlit as st
 import pandas as pd
 import pickle
 import requests
-import json
 
 st.set_page_config(
     page_title="LoL Match Predictor",
@@ -28,6 +27,66 @@ def rate_agg(agg_score):
     if agg_score >= 0.58:   return "🟢 High aggression"
     elif agg_score >= 0.48: return "🟡 Average aggression"
     else:                   return "🔴 Low aggression"
+
+def model_confidence(b_games, r_games, h2h_total,
+                     form_diff, winrate_diff, champ_diff):
+    score = 0
+    reasons = []
+    warnings_list = []
+
+    min_games = min(b_games, r_games)
+    if min_games >= 50:
+        score += 3
+        reasons.append(f"Strong team history ({min_games}+ games each)")
+    elif min_games >= 20:
+        score += 2
+        reasons.append(f"Decent team history ({min_games}+ games each)")
+    elif min_games >= 10:
+        score += 1
+        reasons.append(f"Limited team history ({min_games} games)")
+    else:
+        warnings_list.append(f"Very little team data ({min_games} games)")
+
+    if h2h_total >= 10:
+        score += 3
+        reasons.append(f"Strong H2H record ({h2h_total} games)")
+    elif h2h_total >= 5:
+        score += 2
+        reasons.append(f"Some H2H history ({h2h_total} games)")
+    elif h2h_total >= 2:
+        score += 1
+        reasons.append(f"Limited H2H ({h2h_total} games)")
+    else:
+        warnings_list.append("No H2H history — using defaults")
+
+    signals = [
+        1 if winrate_diff > 0.05 else (-1 if winrate_diff < -0.05 else 0),
+        1 if form_diff > 0.1 else (-1 if form_diff < -0.1 else 0),
+        1 if champ_diff > 0.02 else (-1 if champ_diff < -0.02 else 0),
+    ]
+    non_zero = [s for s in signals if s != 0]
+    if len(non_zero) >= 2:
+        if all(s == non_zero[0] for s in non_zero):
+            score += 3
+            reasons.append("All signals agree")
+        else:
+            score += 1
+            warnings_list.append("Mixed signals — features conflict")
+    else:
+        score += 1
+        warnings_list.append("Weak signal strength")
+
+    if score >= 7:
+        level = "🟢 HIGH"
+        desc  = "Strong data, clear favourite"
+    elif score >= 4:
+        level = "🟡 MEDIUM"
+        desc  = "Reasonable data, some uncertainty"
+    else:
+        level = "🔴 LOW"
+        desc  = "Limited data or conflicting signals"
+
+    return level, desc, reasons, warnings_list
 
 @st.cache_resource
 def load_models():
@@ -475,6 +534,22 @@ if predict_btn:
         est_time    = (b_speed + r_speed) / 2
         positions   = ['Top', 'Jng', 'Mid', 'ADC', 'Sup']
 
+        # Model confidence levels
+        win_conf_level, win_conf_desc, win_reasons, win_warnings = model_confidence(
+            b_games, r_games, h2h_total,
+            b_form - r_form, b_wr - r_wr, b_champ_wr - r_champ_wr)
+
+        ft5_conf_level, ft5_conf_desc, ft5_reasons, ft5_warnings = model_confidence(
+            ft5_team_games.get(blue_team, 0) if blue_team else 0,
+            ft5_team_games.get(red_team,  0) if red_team  else 0,
+            ft5_h2h_tot,
+            b_early_form - r_early_form,
+            b_early - r_early,
+            b_agg - r_agg)
+
+        win_caution = 0.60 <= max(blue_win_conf, red_win_conf) < 0.65
+        ft5_caution = 0.60 <= max(blue_ft5_conf, red_ft5_conf) < 0.65
+
         st.divider()
 
         # Team stats
@@ -575,6 +650,14 @@ if predict_btn:
                 st.info(f"💰 {win_red_units}u — {win_red_label}" if win_red_units > 0
                         else "💰 ⛔ SKIP")
 
+        st.markdown(f"**📊 Model confidence: {win_conf_level}** — {win_conf_desc}")
+        for r in win_reasons:
+            st.write(f"✔ {r}")
+        for w in win_warnings:
+            st.write(f"⚠️ {w}")
+        if win_caution:
+            st.warning("Win probability in 60-65% range — backtest shows only 54.3% actual accuracy here, be cautious")
+
         st.divider()
 
         # FT5 signals
@@ -646,9 +729,17 @@ if predict_btn:
                 st.info(f"💰 {ft5_red_units}u — {ft5_red_label}" if ft5_red_units > 0
                         else "💰 ⛔ SKIP")
 
+        st.markdown(f"**📊 Model confidence: {ft5_conf_level}** — {ft5_conf_desc}")
+        for r in ft5_reasons:
+            st.write(f"✔ {r}")
+        for w in ft5_warnings:
+            st.write(f"⚠️ {w}")
+        if ft5_caution:
+            st.warning("FT5 probability in 60-65% range — treat with extra caution")
+
         st.divider()
 
-        # Claude reasoning — only show if both teams and all picks are entered
+        # Claude reasoning
         if blue_team and red_team and len(blue) == 5 and len(red) == 5:
             st.markdown("### 🤖 AI Analysis")
             with st.spinner("Generating analysis..."):
