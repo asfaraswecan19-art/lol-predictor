@@ -278,7 +278,10 @@ Keep it concise and analytical. Focus on what actually matters for these specifi
             timeout=30
         )
         data = response.json()
-        return data['content'][0]['text']
+        if 'content' in data and len(data['content']) > 0:
+            return data['content'][0]['text']
+        else:
+            return f"Reasoning unavailable — API response: {data}"
     except Exception as e:
         return f"Reasoning unavailable: {str(e)}"
 
