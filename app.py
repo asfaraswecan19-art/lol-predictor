@@ -271,7 +271,7 @@ Keep it concise and analytical. Focus on what actually matters for these specifi
                 "content-type": "application/json"
             },
             json={
-                "model": "claude-sonnet-4-20250514",
+                "model": "claude-sonnet-4-5",
                 "max_tokens": 600,
                 "messages": [{"role": "user", "content": prompt}]
             },
