@@ -174,6 +174,10 @@ with col1:
     if blue_team != prev_blue_team:
         st.session_state['_prev_blue_team'] = blue_team
         if blue_team and blue_team in team_lineups:
+            autofill_players(team_lineups[blue_team], 'blue')
+
+    # DEBUG
+    if blue_team and blue_team in team_lineups:
         st.write(f"DEBUG lineup: {team_lineups[blue_team]}")
         st.write(f"DEBUG session: top={st.session_state['blue_p_top']} jng={st.session_state['blue_p_jg']} mid={st.session_state['blue_p_mid']} adc={st.session_state['blue_p_adc']} sup={st.session_state['blue_p_sup']}")
 
@@ -264,7 +268,6 @@ if predict_btn:
         if missing:
             st.info(f"ℹ️ Missing: {', '.join(missing)} — using dataset averages")
 
-        # Win model features
         if len(blue) == 5:
             b_win_enc = pd.DataFrame(win_mlb.transform([blue]),
                 columns=['blue_' + c for c in win_mlb.classes_])
@@ -333,7 +336,6 @@ if predict_btn:
         blue_win_conf = win_prob[1]
         red_win_conf  = win_prob[0]
 
-        # FT5 features
         if len(blue) == 5:
             b_ft5_enc = pd.DataFrame(ft5_mlb.transform([blue]),
                 columns=['blue_' + c for c in ft5_mlb.classes_])
@@ -397,7 +399,6 @@ if predict_btn:
 
         st.divider()
 
-        # Team stats
         st.markdown("### 📋 Team Stats")
         sc1, sc2 = st.columns(2)
         with sc1:
@@ -420,7 +421,6 @@ if predict_btn:
 
         st.divider()
 
-        # Win signals
         st.markdown("### 📊 Win Signal Breakdown")
         show_signal("Team win rate",    b_wr,       r_wr,       0.05, 0.15, blue_team_name, red_team_name)
         show_signal("Recent form",      b_form,     r_form,     0.10, 0.25, blue_team_name, red_team_name, ".0f")
@@ -473,7 +473,6 @@ if predict_btn:
 
         st.divider()
 
-        # Match winner
         st.markdown("### 🏆 Match Winner")
         winner_color = "🔵" if blue_win_conf > red_win_conf else "🔴"
         st.markdown(f"#### {winner_color} Model pick: **{win_winner}**")
@@ -497,7 +496,6 @@ if predict_btn:
 
         st.divider()
 
-        # FT5 signals
         st.markdown("### 📊 FT5 Signal Breakdown")
         show_signal("Early game rate", b_early,      r_early,      0.05, 0.15, blue_team_name, red_team_name)
         show_signal("Early form",      b_early_form, r_early_form, 0.10, 0.25, blue_team_name, red_team_name, ".0f")
@@ -543,7 +541,6 @@ if predict_btn:
 
         st.divider()
 
-        # First to five
         st.markdown("### ⚔️ First to Five Kills")
         ft5_color = "🔵" if blue_ft5_conf > red_ft5_conf else "🔴"
         st.markdown(f"#### {ft5_color} Model pick: **{ft5_winner}**")
