@@ -739,8 +739,8 @@ if predict_btn:
 
         st.divider()
 
-        # Claude reasoning
-       if len(blue) == 5 and len(red) == 5:
+       # Claude reasoning
+        if len(blue) == 5 and len(red) == 5:
             st.markdown("### 🤖 AI Analysis")
             with st.spinner("Generating analysis..."):
                 reasoning = get_claude_reasoning(
