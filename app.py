@@ -174,7 +174,8 @@ with col1:
     if blue_team != prev_blue_team:
         st.session_state['_prev_blue_team'] = blue_team
         if blue_team and blue_team in team_lineups:
-            autofill_players(team_lineups[blue_team], 'blue')
+        st.write(f"DEBUG lineup: {team_lineups[blue_team]}")
+        st.write(f"DEBUG session: top={st.session_state['blue_p_top']} jng={st.session_state['blue_p_jg']} mid={st.session_state['blue_p_mid']} adc={st.session_state['blue_p_adc']} sup={st.session_state['blue_p_sup']}")
 
     blue_top = st.selectbox("Top (optional)", options=[None] + all_champs,
         format_func=lambda x: "— no pick —" if x is None else x, key='blue_top')
