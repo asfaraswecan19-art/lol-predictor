@@ -3,6 +3,8 @@ warnings.filterwarnings('ignore')
 import streamlit as st
 import pandas as pd
 import pickle
+import requests
+import json
 
 st.set_page_config(
     page_title="LoL Match Predictor",
@@ -26,66 +28,6 @@ def rate_agg(agg_score):
     if agg_score >= 0.58:   return "🟢 High aggression"
     elif agg_score >= 0.48: return "🟡 Average aggression"
     else:                   return "🔴 Low aggression"
-
-def model_confidence(b_games, r_games, h2h_total,
-                     form_diff, winrate_diff, champ_diff):
-    score = 0
-    reasons = []
-    warnings_list = []
-
-    min_games = min(b_games, r_games)
-    if min_games >= 50:
-        score += 3
-        reasons.append(f"Strong team history ({min_games}+ games each)")
-    elif min_games >= 20:
-        score += 2
-        reasons.append(f"Decent team history ({min_games}+ games each)")
-    elif min_games >= 10:
-        score += 1
-        reasons.append(f"Limited team history ({min_games} games)")
-    else:
-        warnings_list.append(f"Very little team data ({min_games} games)")
-
-    if h2h_total >= 10:
-        score += 3
-        reasons.append(f"Strong H2H record ({h2h_total} games)")
-    elif h2h_total >= 5:
-        score += 2
-        reasons.append(f"Some H2H history ({h2h_total} games)")
-    elif h2h_total >= 2:
-        score += 1
-        reasons.append(f"Limited H2H ({h2h_total} games)")
-    else:
-        warnings_list.append("No H2H history — using defaults")
-
-    signals = [
-        1 if winrate_diff > 0.05 else (-1 if winrate_diff < -0.05 else 0),
-        1 if form_diff > 0.1    else (-1 if form_diff    < -0.1  else 0),
-        1 if champ_diff > 0.02  else (-1 if champ_diff   < -0.02 else 0),
-    ]
-    non_zero = [s for s in signals if s != 0]
-    if len(non_zero) >= 2:
-        if all(s == non_zero[0] for s in non_zero):
-            score += 3
-            reasons.append("All signals agree")
-        else:
-            score += 1
-            warnings_list.append("Mixed signals — features conflict")
-    else:
-        score += 1
-        warnings_list.append("Weak signal strength")
-
-    if score >= 7:
-        level = "🟢 HIGH"
-        desc  = "Strong data, clear favourite"
-    elif score >= 4:
-        level = "🟡 MEDIUM"
-        desc  = "Reasonable data, some uncertainty"
-    else:
-        level = "🔴 LOW"
-        desc  = "Limited data or conflicting signals"
-
-    return level, desc, reasons, warnings_list
 
 @st.cache_resource
 def load_models():
@@ -199,6 +141,87 @@ def autofill_players(lineup, side):
         }
     for k, v in mapping.items():
         st.session_state[k] = v
+
+# =================================================================
+# CLAUDE REASONING
+# =================================================================
+def get_claude_reasoning(
+        blue_team, red_team,
+        blue_picks, red_picks,
+        blue_players, red_players,
+        blue_win_conf, red_win_conf,
+        blue_ft5_conf, red_ft5_conf,
+        b_wr, r_wr, b_form, r_form,
+        b_champ_wr, r_champ_wr,
+        b_pc_avg, r_pc_avg,
+        b_win_h2h, r_win_h2h,
+        b_agg, r_agg,
+        b_early, r_early,
+        b_speed, r_speed,
+        win_blue_odds, win_red_odds,
+        ft5_blue_odds, ft5_red_odds):
+
+    positions = ['Top', 'Jng', 'Mid', 'ADC', 'Sup']
+
+    blue_roster = ', '.join([
+        f"{blue_players[i]} ({positions[i]}: {blue_picks[i]}, "
+        f"champ wr {win_champ_rate.get(blue_picks[i], 0.5)*100:.0f}%, "
+        f"agg {champ_aggression.get(blue_picks[i], 0.5)*100:.0f}%)"
+        for i in range(len(blue_picks))
+    ])
+
+    red_roster = ', '.join([
+        f"{red_players[i]} ({positions[i]}: {red_picks[i]}, "
+        f"champ wr {win_champ_rate.get(red_picks[i], 0.5)*100:.0f}%, "
+        f"agg {champ_aggression.get(red_picks[i], 0.5)*100:.0f}%)"
+        for i in range(len(red_picks))
+    ])
+
+    prompt = f"""You are an expert League of Legends analyst. Analyze this pro match and explain the predictions in 3-4 sentences each. Be specific about champion synergies, early/late game dynamics, and player strengths.
+
+MATCH: {blue_team} (Blue) vs {red_team} (Red)
+
+BLUE TEAM - {blue_team}:
+{blue_roster}
+Team win rate: {b_wr*100:.1f}% | Form (L5): {b_form*100:.0f}% | H2H: {b_win_h2h}-{r_win_h2h} vs opponent
+Champion quality avg: {b_champ_wr*100:.1f}% | Player-champ avg: {b_pc_avg*100:.1f}%
+Early game rate: {b_early*100:.1f}% | Avg kill speed: {b_speed:.1f} min | Aggression: {b_agg*100:.1f}%
+
+RED TEAM - {red_team}:
+{red_roster}
+Team win rate: {r_wr*100:.1f}% | Form (L5): {r_form*100:.0f}% | H2H: {r_win_h2h}-{b_win_h2h} vs opponent
+Champion quality avg: {r_champ_wr*100:.1f}% | Player-champ avg: {r_pc_avg*100:.1f}%
+Early game rate: {r_early*100:.1f}% | Avg kill speed: {r_speed:.1f} min | Aggression: {r_agg*100:.1f}%
+
+MODEL PREDICTIONS:
+Match winner: {blue_team} {blue_win_conf*100:.1f}% vs {red_team} {red_win_conf*100:.1f}%
+First to 5 kills: {blue_team} {blue_ft5_conf*100:.1f}% vs {red_team} {red_ft5_conf*100:.1f}%
+
+Please provide:
+1. MATCH WINNER REASONING (3-4 sentences): Why does the model favour {blue_team if blue_win_conf > red_win_conf else red_team}? Mention specific champion picks, player strengths, team stats, and game style.
+2. FIRST TO 5 KILLS REASONING (3-4 sentences): Which team has the more aggressive early game composition and why? Mention specific champions known for early kills and jungle pressure.
+
+Keep it concise and analytical. Focus on what actually matters for these specific picks."""
+
+    try:
+        response = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": st.secrets["ANTHROPIC_API_KEY"],
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json"
+            },
+            json={
+                "model": "claude-sonnet-4-20250514",
+                "max_tokens": 600,
+                "messages": [{"role": "user", "content": prompt}]
+            },
+            timeout=30
+        )
+        data = response.json()
+        return data['content'][0]['text']
+    except Exception as e:
+        return f"Reasoning unavailable: {str(e)}"
 
 # =================================================================
 # UI
@@ -327,14 +350,16 @@ if predict_btn:
             b_win_enc = pd.DataFrame(win_mlb.transform([blue]),
                 columns=['blue_' + c for c in win_mlb.classes_])
         else:
-            b_win_enc = pd.DataFrame([[0] * len(win_mlb.classes_)],
+            b_win_enc = pd.DataFrame(
+                [[0] * len(win_mlb.classes_)],
                 columns=['blue_' + c for c in win_mlb.classes_])
 
         if len(red) == 5:
             r_win_enc = pd.DataFrame(win_mlb.transform([red]),
                 columns=['red_' + c for c in win_mlb.classes_])
         else:
-            r_win_enc = pd.DataFrame([[0] * len(win_mlb.classes_)],
+            r_win_enc = pd.DataFrame(
+                [[0] * len(win_mlb.classes_)],
                 columns=['red_' + c for c in win_mlb.classes_])
 
         b_wr    = win_team_rate.get(blue_team, 0.5)  if blue_team else 0.5
@@ -342,22 +367,33 @@ if predict_btn:
         b_games = win_team_games.get(blue_team, 0)   if blue_team else 0
         r_games = win_team_games.get(red_team,  0)   if red_team  else 0
 
-        b_champ_wr = sum(win_champ_rate.get(c, 0.5) for c in blue) / len(blue) if blue else 0.5
-        r_champ_wr = sum(win_champ_rate.get(c, 0.5) for c in red)  / len(red)  if red  else 0.5
+        b_champ_wr = sum(win_champ_rate.get(c, 0.5) for c in blue) / len(blue) \
+                     if blue else 0.5
+        r_champ_wr = sum(win_champ_rate.get(c, 0.5) for c in red)  / len(red)  \
+                     if red  else 0.5
 
-        win_h2h_r  = get_h2h_rate(win_h2h, blue_team, red_team) if blue_team and red_team else 0.5
+        win_h2h_r  = get_h2h_rate(win_h2h, blue_team, red_team) \
+                     if blue_team and red_team else 0.5
         b_form     = get_form(win_team_recent, blue_team) if blue_team else 0.5
         r_form     = get_form(win_team_recent, red_team)  if red_team  else 0.5
-        h2h_total  = get_h2h_total(win_h2h, blue_team, red_team) if blue_team and red_team else 0
+        h2h_total  = get_h2h_total(win_h2h, blue_team, red_team) \
+                     if blue_team and red_team else 0
         b_win_h2h, r_win_h2h = get_h2h_record(win_h2h, blue_team, red_team) \
                                 if blue_team and red_team else (0, 0)
 
-        b_pc_avg = sum(pc_rate.get((p.strip(), c.strip()), 0.5)
-                       for p, c in zip(blue_players, blue) if p.strip()) / max(len(blue), 1) \
-                   if blue and any(p.strip() for p in blue_players) else 0.5
-        r_pc_avg = sum(pc_rate.get((p.strip(), c.strip()), 0.5)
-                       for p, c in zip(red_players, red) if p.strip()) / max(len(red), 1) \
-                   if red and any(p.strip() for p in red_players) else 0.5
+        if blue and blue_players:
+            b_pc_avg = sum(pc_rate.get((p.strip(), c.strip()), 0.5)
+                           for p, c in zip(blue_players, blue)
+                           if p.strip() != '') / max(len(blue), 1)
+        else:
+            b_pc_avg = 0.5
+
+        if red and red_players:
+            r_pc_avg = sum(pc_rate.get((p.strip(), c.strip()), 0.5)
+                           for p, c in zip(red_players, red)
+                           if p.strip() != '') / max(len(red), 1)
+        else:
+            r_pc_avg = 0.5
 
         win_extra_row = pd.DataFrame([[
             b_wr, r_wr, b_wr - r_wr,
@@ -382,23 +418,30 @@ if predict_btn:
             b_ft5_enc = pd.DataFrame(ft5_mlb.transform([blue]),
                 columns=['blue_' + c for c in ft5_mlb.classes_])
         else:
-            b_ft5_enc = pd.DataFrame([[0] * len(ft5_mlb.classes_)],
+            b_ft5_enc = pd.DataFrame(
+                [[0] * len(ft5_mlb.classes_)],
                 columns=['blue_' + c for c in ft5_mlb.classes_])
 
         if len(red) == 5:
             r_ft5_enc = pd.DataFrame(ft5_mlb.transform([red]),
                 columns=['red_' + c for c in ft5_mlb.classes_])
         else:
-            r_ft5_enc = pd.DataFrame([[0] * len(ft5_mlb.classes_)],
+            r_ft5_enc = pd.DataFrame(
+                [[0] * len(ft5_mlb.classes_)],
                 columns=['red_' + c for c in ft5_mlb.classes_])
 
-        b_agg        = sum(champ_aggression.get(c, 0.5) for c in blue) / len(blue) if blue else 0.5
-        r_agg        = sum(champ_aggression.get(c, 0.5) for c in red)  / len(red)  if red  else 0.5
+        b_agg        = sum(champ_aggression.get(c, 0.5) for c in blue) / len(blue) \
+                       if blue else 0.5
+        r_agg        = sum(champ_aggression.get(c, 0.5) for c in red)  / len(red)  \
+                       if red  else 0.5
         b_early      = team_early_rate.get(blue_team, 0.5)  if blue_team else 0.5
         r_early      = team_early_rate.get(red_team,  0.5)  if red_team  else 0.5
         b_speed      = team_kill_speed.get(blue_team, 10.0) if blue_team else 10.0
         r_speed      = team_kill_speed.get(red_team,  10.0) if red_team  else 10.0
-        ft5_h2h_r    = get_h2h_rate(ft5_h2h, blue_team, red_team) if blue_team and red_team else 0.5
+        ft5_h2h_r    = get_h2h_rate(ft5_h2h, blue_team, red_team) \
+                       if blue_team and red_team else 0.5
+        ft5_h2h_tot  = get_h2h_total(ft5_h2h, blue_team, red_team) \
+                       if blue_team and red_team else 0
         b_ft5_h2h, r_ft5_h2h = get_h2h_record(ft5_h2h, blue_team, red_team) \
                                 if blue_team and red_team else (0, 0)
         b_early_form = get_form(ft5_team_recent, blue_team) if blue_team else 0.5
@@ -431,16 +474,6 @@ if predict_btn:
         faster_team = blue_team_name if b_speed < r_speed else red_team_name
         est_time    = (b_speed + r_speed) / 2
         positions   = ['Top', 'Jng', 'Mid', 'ADC', 'Sup']
-
-        # Confidence
-        win_conf_level, win_conf_desc, win_reasons, win_warnings = model_confidence(
-            b_games, r_games, h2h_total,
-            b_form - r_form, b_wr - r_wr, b_champ_wr - r_champ_wr)
-        ft5_conf_level, ft5_conf_desc, ft5_reasons, ft5_warnings = model_confidence(
-            ft5_team_games.get(blue_team, 0) if blue_team else 0,
-            ft5_team_games.get(red_team,  0) if red_team  else 0,
-            get_h2h_total(ft5_h2h, blue_team, red_team) if blue_team and red_team else 0,
-            b_early_form - r_early_form, b_early - r_early, b_agg - r_agg)
 
         st.divider()
 
@@ -491,8 +524,10 @@ if predict_btn:
             for i, champ in enumerate(blue):
                 player = blue_players[i] if i < len(blue_players) else ''
                 cwr    = win_champ_rate.get(champ, 0.5)
-                pcr    = pc_rate.get((player.strip(), champ.strip()), 0.5) if player.strip() else cwr
-                pcg    = pc_games.get((player.strip(), champ.strip()), 0) if player.strip() else 0
+                pcr    = pc_rate.get((player.strip(), champ.strip()), 0.5) \
+                         if player.strip() else cwr
+                pcg    = pc_games.get((player.strip(), champ.strip()), 0) \
+                         if player.strip() else 0
                 rating = rate_champ(cwr, pcr)
                 pos    = positions[i] if i < len(positions) else ''
                 gstr   = f"({pcg} games)" if pcg > 0 else "(no player data)"
@@ -505,8 +540,10 @@ if predict_btn:
             for i, champ in enumerate(red):
                 player = red_players[i] if i < len(red_players) else ''
                 cwr    = win_champ_rate.get(champ, 0.5)
-                pcr    = pc_rate.get((player.strip(), champ.strip()), 0.5) if player.strip() else cwr
-                pcg    = pc_games.get((player.strip(), champ.strip()), 0) if player.strip() else 0
+                pcr    = pc_rate.get((player.strip(), champ.strip()), 0.5) \
+                         if player.strip() else cwr
+                pcg    = pc_games.get((player.strip(), champ.strip()), 0) \
+                         if player.strip() else 0
                 rating = rate_champ(cwr, pcr)
                 pos    = positions[i] if i < len(positions) else ''
                 gstr   = f"({pcg} games)" if pcg > 0 else "(no player data)"
@@ -537,12 +574,6 @@ if predict_btn:
             if red_win_conf > blue_win_conf:
                 st.info(f"💰 {win_red_units}u — {win_red_label}" if win_red_units > 0
                         else "💰 ⛔ SKIP")
-
-        st.markdown(f"**📊 Model confidence: {win_conf_level}** — {win_conf_desc}")
-        for r in win_reasons:
-            st.write(f"✔ {r}")
-        for w in win_warnings:
-            st.write(f"⚠️ {w}")
 
         st.divider()
 
@@ -615,11 +646,28 @@ if predict_btn:
                 st.info(f"💰 {ft5_red_units}u — {ft5_red_label}" if ft5_red_units > 0
                         else "💰 ⛔ SKIP")
 
-        st.markdown(f"**📊 Model confidence: {ft5_conf_level}** — {ft5_conf_desc}")
-        for r in ft5_reasons:
-            st.write(f"✔ {r}")
-        for w in ft5_warnings:
-            st.write(f"⚠️ {w}")
-
         st.divider()
+
+        # Claude reasoning — only show if both teams and all picks are entered
+        if blue_team and red_team and len(blue) == 5 and len(red) == 5:
+            st.markdown("### 🤖 AI Analysis")
+            with st.spinner("Generating analysis..."):
+                reasoning = get_claude_reasoning(
+                    blue_team_name, red_team_name,
+                    blue, red,
+                    blue_players, red_players,
+                    blue_win_conf, red_win_conf,
+                    blue_ft5_conf, red_ft5_conf,
+                    b_wr, r_wr, b_form, r_form,
+                    b_champ_wr, r_champ_wr,
+                    b_pc_avg, r_pc_avg,
+                    b_win_h2h, r_win_h2h,
+                    b_agg, r_agg,
+                    b_early, r_early,
+                    b_speed, r_speed,
+                    win_blue_odds, win_red_odds,
+                    ft5_blue_odds, ft5_red_odds)
+            st.write(reasoning)
+            st.divider()
+
         st.caption("~61.88% true accuracy | Trust 65%+ | Best ROI at 2.30+ odds")
