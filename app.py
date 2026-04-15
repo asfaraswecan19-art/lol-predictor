@@ -71,7 +71,7 @@ def model_confidence(b_games, r_games, h2h_total,
             reasons.append("All signals agree")
         else:
             score += 1
-            warnings_list.append("Mixed signals — features conflict")
+            warnings_list.append("Mixed signals")
     else:
         score += 1
         warnings_list.append("Weak signal strength")
@@ -223,14 +223,16 @@ def get_claude_reasoning(
     positions = ['Top', 'Jng', 'Mid', 'ADC', 'Sup']
 
     blue_roster = ', '.join([
-        f"{blue_players[i]} ({positions[i]}: {blue_picks[i]}, "
+        f"{blue_players[i] if i < len(blue_players) and blue_players[i].strip() else 'Unknown'}"
+        f" ({positions[i]}: {blue_picks[i]}, "
         f"champ wr {win_champ_rate.get(blue_picks[i], 0.5)*100:.0f}%, "
         f"agg {champ_aggression.get(blue_picks[i], 0.5)*100:.0f}%)"
         for i in range(len(blue_picks))
     ])
 
     red_roster = ', '.join([
-        f"{red_players[i]} ({positions[i]}: {red_picks[i]}, "
+        f"{red_players[i] if i < len(red_players) and red_players[i].strip() else 'Unknown'}"
+        f" ({positions[i]}: {red_picks[i]}, "
         f"champ wr {win_champ_rate.get(red_picks[i], 0.5)*100:.0f}%, "
         f"agg {champ_aggression.get(red_picks[i], 0.5)*100:.0f}%)"
         for i in range(len(red_picks))
@@ -537,7 +539,6 @@ if predict_btn:
         est_time    = (b_speed + r_speed) / 2
         positions   = ['Top', 'Jng', 'Mid', 'ADC', 'Sup']
 
-        # Model confidence levels
         win_conf_level, win_conf_desc, win_reasons, win_warnings = model_confidence(
             b_games, r_games, h2h_total,
             b_form - r_form, b_wr - r_wr, b_champ_wr - r_champ_wr)
@@ -657,7 +658,19 @@ if predict_btn:
         for r in win_reasons:
             st.write(f"✔ {r}")
         for w in win_warnings:
-            st.write(f"⚠️ {w}")
+            if "Mixed signals" in w:
+                wr_dir   = f"🔵 {blue_team_name}" if b_wr > r_wr else f"🔴 {red_team_name}"
+                form_dir = f"🔵 {blue_team_name}" if b_form > r_form else f"🔴 {red_team_name}"
+                champ_dir= f"🔵 {blue_team_name}" if b_champ_wr > r_champ_wr else f"🔴 {red_team_name}"
+                st.write(f"⚠️ Mixed signals — win rate favours {wr_dir} ({abs(b_wr-r_wr)*100:.1f}% diff), "
+                         f"form favours {form_dir} ({abs(b_form-r_form)*100:.0f}% diff), "
+                         f"champion quality favours {champ_dir} ({abs(b_champ_wr-r_champ_wr)*100:.1f}% diff)")
+            elif "Weak signal" in w:
+                st.write(f"⚠️ Weak signal strength — win rate diff: {abs(b_wr-r_wr)*100:.1f}%, "
+                         f"form diff: {abs(b_form-r_form)*100:.0f}%, "
+                         f"champ diff: {abs(b_champ_wr-r_champ_wr)*100:.1f}%")
+            else:
+                st.write(f"⚠️ {w}")
         if win_caution:
             st.warning("Win probability in 60-65% range — backtest shows only 54.3% actual accuracy here, be cautious")
 
@@ -736,13 +749,25 @@ if predict_btn:
         for r in ft5_reasons:
             st.write(f"✔ {r}")
         for w in ft5_warnings:
-            st.write(f"⚠️ {w}")
+            if "Mixed signals" in w:
+                early_dir = f"🔵 {blue_team_name}" if b_early > r_early else f"🔴 {red_team_name}"
+                form_dir  = f"🔵 {blue_team_name}" if b_early_form > r_early_form else f"🔴 {red_team_name}"
+                agg_dir   = f"🔵 {blue_team_name}" if b_agg > r_agg else f"🔴 {red_team_name}"
+                st.write(f"⚠️ Mixed signals — early rate favours {early_dir} ({abs(b_early-r_early)*100:.1f}% diff), "
+                         f"early form favours {form_dir} ({abs(b_early_form-r_early_form)*100:.0f}% diff), "
+                         f"aggression favours {agg_dir} ({abs(b_agg-r_agg)*100:.1f}% diff)")
+            elif "Weak signal" in w:
+                st.write(f"⚠️ Weak signal strength — early rate diff: {abs(b_early-r_early)*100:.1f}%, "
+                         f"form diff: {abs(b_early_form-r_early_form)*100:.0f}%, "
+                         f"aggression diff: {abs(b_agg-r_agg)*100:.1f}%")
+            else:
+                st.write(f"⚠️ {w}")
         if ft5_caution:
             st.warning("FT5 probability in 60-65% range — treat with extra caution")
 
         st.divider()
 
-       # Claude reasoning
+        # Claude reasoning
         if len(blue) == 5 and len(red) == 5:
             st.markdown("### 🤖 AI Analysis")
             with st.spinner("Generating analysis..."):
