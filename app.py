@@ -17,6 +17,14 @@ st.caption("Win + First to Five | ~61.88% true accuracy | Calibrated probabiliti
 FORM_WINDOW = 5
 BLUE_SIDE_WINRATE = 0.5312
 
+TEAM_ALIASES = {
+    'Team BDS': 'Team Shifters',
+    'BDS':      'Team Shifters',
+}
+
+def normalize_team(name):
+    return TEAM_ALIASES.get(str(name), str(name))
+
 def rate_champ(win_rate, pc_rate):
     combined = (win_rate + pc_rate) / 2
     if combined >= 0.58:   return "🟢 Strong"
@@ -202,6 +210,69 @@ def autofill_players(lineup, side):
         st.session_state[k] = v
 
 # =================================================================
+# DRAFT ONLY PREDICTION
+# Sets all team stats to neutral 0.5, uses only champion features
+# =================================================================
+def get_draft_only_prediction(blue, red, blue_players, red_players,
+                               b_champ_wr, r_champ_wr,
+                               b_pc_avg, r_pc_avg):
+    # Win model — neutral team stats
+    b_win_enc = pd.DataFrame(win_mlb.transform([blue]),
+        columns=['blue_' + c for c in win_mlb.classes_])
+    r_win_enc = pd.DataFrame(win_mlb.transform([red]),
+        columns=['red_'  + c for c in win_mlb.classes_])
+
+    neutral_row = pd.DataFrame([[
+        0.5, 0.5, 0.0,   # team win rates neutral
+        50,  50,         # games played neutral
+        b_champ_wr, r_champ_wr, b_champ_wr - r_champ_wr,
+        0.5,             # h2h neutral
+        0.5, 0.5, 0.0,  # form neutral
+        BLUE_SIDE_WINRATE,
+        b_pc_avg, r_pc_avg, b_pc_avg - r_pc_avg,
+    ]], columns=[
+        'blue_team_winrate', 'red_team_winrate', 'team_winrate_diff',
+        'blue_team_games', 'red_team_games',
+        'blue_avg_winrate', 'red_avg_winrate', 'winrate_diff',
+        'h2h_winrate', 'blue_form', 'red_form', 'form_diff',
+        'blue_side_advantage', 'blue_pc_avg', 'red_pc_avg', 'pc_avg_diff',
+    ])
+
+    win_row  = pd.concat([b_win_enc, r_win_enc, neutral_row], axis=1)
+    win_prob = win_model.predict_proba(win_row)[0]
+    blue_draft_win = win_prob[1]
+    red_draft_win  = win_prob[0]
+
+    # FT5 model — neutral team stats
+    b_ft5_enc = pd.DataFrame(ft5_mlb.transform([blue]),
+        columns=['blue_' + c for c in ft5_mlb.classes_])
+    r_ft5_enc = pd.DataFrame(ft5_mlb.transform([red]),
+        columns=['red_'  + c for c in ft5_mlb.classes_])
+
+    b_agg = sum(champ_aggression.get(c, 0.5) for c in blue) / len(blue)
+    r_agg = sum(champ_aggression.get(c, 0.5) for c in red)  / len(red)
+
+    neutral_ft5 = pd.DataFrame([[
+        b_agg, r_agg, b_agg - r_agg,
+        0.5, 0.5, 0.0,   # early rate neutral
+        10.0, 10.0, 0.0, # kill speed neutral
+        0.5,             # h2h neutral
+        0.5, 0.5, 0.0,  # early form neutral
+    ]], columns=[
+        'blue_aggression', 'red_aggression', 'aggression_diff',
+        'blue_early_rate', 'red_early_rate', 'early_rate_diff',
+        'blue_kill_speed', 'red_kill_speed', 'speed_diff',
+        'h2h_early_rate', 'blue_early_form', 'red_early_form', 'early_form_diff'
+    ])
+
+    ft5_row  = pd.concat([b_ft5_enc, r_ft5_enc, neutral_ft5], axis=1)
+    ft5_prob = ft5_model.predict_proba(ft5_row)[0]
+    blue_draft_ft5 = ft5_prob[1]
+    red_draft_ft5  = ft5_prob[0]
+
+    return blue_draft_win, red_draft_win, blue_draft_ft5, red_draft_ft5
+
+# =================================================================
 # CLAUDE REASONING
 # =================================================================
 def get_claude_reasoning(
@@ -320,8 +391,9 @@ with col1:
         key='blue_team')
     if blue_team != prev_blue_team:
         st.session_state['_prev_blue_team'] = blue_team
-        if blue_team and blue_team in team_lineups:
-            autofill_players(team_lineups[blue_team], 'blue')
+        blue_team_norm = normalize_team(blue_team) if blue_team else None
+        if blue_team_norm and blue_team_norm in team_lineups:
+            autofill_players(team_lineups[blue_team_norm], 'blue')
 
     blue_top = st.selectbox("Top (optional)", options=[None] + all_champs,
         format_func=lambda x: "— no pick —" if x is None else x, key='blue_top')
@@ -348,8 +420,9 @@ with col2:
         key='red_team')
     if red_team != prev_red_team:
         st.session_state['_prev_red_team'] = red_team
-        if red_team and red_team in team_lineups:
-            autofill_players(team_lineups[red_team], 'red')
+        red_team_norm = normalize_team(red_team) if red_team else None
+        if red_team_norm and red_team_norm in team_lineups:
+            autofill_players(team_lineups[red_team_norm], 'red')
 
     red_top  = st.selectbox("Top (optional)", options=[None] + all_champs,
         format_func=lambda x: "— no pick —" if x is None else x, key='red_top')
@@ -393,13 +466,15 @@ if predict_btn:
     blue_players = [blue_p_top, blue_p_jg, blue_p_mid, blue_p_adc, blue_p_sup]
     red_players  = [red_p_top,  red_p_jg,  red_p_mid,  red_p_adc,  red_p_sup]
 
+    blue_team_norm = normalize_team(blue_team) if blue_team else None
+    red_team_norm  = normalize_team(red_team)  if red_team  else None
     blue_team_name = blue_team if blue_team else "Blue Team"
     red_team_name  = red_team  if red_team  else "Red Team"
 
     picked = [c for c in blue + red if c]
     if len(picked) != len(set(picked)) and len(picked) > 0:
         st.error("Each champion must be unique across both teams!")
-    elif blue_team and red_team and blue_team == red_team:
+    elif blue_team and red_team and blue_team_norm == red_team_norm:
         st.error("Blue and red team can't be the same!")
     else:
         missing = []
@@ -426,24 +501,24 @@ if predict_btn:
                 [[0] * len(win_mlb.classes_)],
                 columns=['red_' + c for c in win_mlb.classes_])
 
-        b_wr    = win_team_rate.get(blue_team, 0.5)  if blue_team else 0.5
-        r_wr    = win_team_rate.get(red_team,  0.5)  if red_team  else 0.5
-        b_games = win_team_games.get(blue_team, 0)   if blue_team else 0
-        r_games = win_team_games.get(red_team,  0)   if red_team  else 0
+        b_wr    = win_team_rate.get(blue_team_norm, 0.5)  if blue_team_norm else 0.5
+        r_wr    = win_team_rate.get(red_team_norm,  0.5)  if red_team_norm  else 0.5
+        b_games = win_team_games.get(blue_team_norm, 0)   if blue_team_norm else 0
+        r_games = win_team_games.get(red_team_norm,  0)   if red_team_norm  else 0
 
         b_champ_wr = sum(win_champ_rate.get(c, 0.5) for c in blue) / len(blue) \
                      if blue else 0.5
         r_champ_wr = sum(win_champ_rate.get(c, 0.5) for c in red)  / len(red)  \
                      if red  else 0.5
 
-        win_h2h_r  = get_h2h_rate(win_h2h, blue_team, red_team) \
-                     if blue_team and red_team else 0.5
-        b_form     = get_form(win_team_recent, blue_team) if blue_team else 0.5
-        r_form     = get_form(win_team_recent, red_team)  if red_team  else 0.5
-        h2h_total  = get_h2h_total(win_h2h, blue_team, red_team) \
-                     if blue_team and red_team else 0
-        b_win_h2h, r_win_h2h = get_h2h_record(win_h2h, blue_team, red_team) \
-                                if blue_team and red_team else (0, 0)
+        win_h2h_r  = get_h2h_rate(win_h2h, blue_team_norm, red_team_norm) \
+                     if blue_team_norm and red_team_norm else 0.5
+        b_form     = get_form(win_team_recent, blue_team_norm) if blue_team_norm else 0.5
+        r_form     = get_form(win_team_recent, red_team_norm)  if red_team_norm  else 0.5
+        h2h_total  = get_h2h_total(win_h2h, blue_team_norm, red_team_norm) \
+                     if blue_team_norm and red_team_norm else 0
+        b_win_h2h, r_win_h2h = get_h2h_record(win_h2h, blue_team_norm, red_team_norm) \
+                                if blue_team_norm and red_team_norm else (0, 0)
 
         if blue and blue_players:
             b_pc_avg = sum(pc_rate.get((p.strip(), c.strip()), 0.5)
@@ -498,18 +573,18 @@ if predict_btn:
                        if blue else 0.5
         r_agg        = sum(champ_aggression.get(c, 0.5) for c in red)  / len(red)  \
                        if red  else 0.5
-        b_early      = team_early_rate.get(blue_team, 0.5)  if blue_team else 0.5
-        r_early      = team_early_rate.get(red_team,  0.5)  if red_team  else 0.5
-        b_speed      = team_kill_speed.get(blue_team, 10.0) if blue_team else 10.0
-        r_speed      = team_kill_speed.get(red_team,  10.0) if red_team  else 10.0
-        ft5_h2h_r    = get_h2h_rate(ft5_h2h, blue_team, red_team) \
-                       if blue_team and red_team else 0.5
-        ft5_h2h_tot  = get_h2h_total(ft5_h2h, blue_team, red_team) \
-                       if blue_team and red_team else 0
-        b_ft5_h2h, r_ft5_h2h = get_h2h_record(ft5_h2h, blue_team, red_team) \
-                                if blue_team and red_team else (0, 0)
-        b_early_form = get_form(ft5_team_recent, blue_team) if blue_team else 0.5
-        r_early_form = get_form(ft5_team_recent, red_team)  if red_team  else 0.5
+        b_early      = team_early_rate.get(blue_team_norm, 0.5)  if blue_team_norm else 0.5
+        r_early      = team_early_rate.get(red_team_norm,  0.5)  if red_team_norm  else 0.5
+        b_speed      = team_kill_speed.get(blue_team_norm, 10.0) if blue_team_norm else 10.0
+        r_speed      = team_kill_speed.get(red_team_norm,  10.0) if red_team_norm  else 10.0
+        ft5_h2h_r    = get_h2h_rate(ft5_h2h, blue_team_norm, red_team_norm) \
+                       if blue_team_norm and red_team_norm else 0.5
+        ft5_h2h_tot  = get_h2h_total(ft5_h2h, blue_team_norm, red_team_norm) \
+                       if blue_team_norm and red_team_norm else 0
+        b_ft5_h2h, r_ft5_h2h = get_h2h_record(ft5_h2h, blue_team_norm, red_team_norm) \
+                                if blue_team_norm and red_team_norm else (0, 0)
+        b_early_form = get_form(ft5_team_recent, blue_team_norm) if blue_team_norm else 0.5
+        r_early_form = get_form(ft5_team_recent, red_team_norm)  if red_team_norm  else 0.5
 
         ft5_extra_row = pd.DataFrame([[
             b_agg, r_agg, b_agg - r_agg,
@@ -528,6 +603,15 @@ if predict_btn:
         blue_ft5_conf = ft5_prob[1]
         red_ft5_conf  = ft5_prob[0]
 
+        # Draft only predictions
+        if len(blue) == 5 and len(red) == 5:
+            blue_draft_win, red_draft_win, blue_draft_ft5, red_draft_ft5 = \
+                get_draft_only_prediction(blue, red, blue_players, red_players,
+                                          b_champ_wr, r_champ_wr,
+                                          b_pc_avg, r_pc_avg)
+        else:
+            blue_draft_win = red_draft_win = blue_draft_ft5 = red_draft_ft5 = None
+
         win_blue_edge, win_blue_units, win_blue_label, win_blue_impl = calc_edge(blue_win_conf, win_blue_odds)
         win_red_edge,  win_red_units,  win_red_label,  win_red_impl  = calc_edge(red_win_conf,  win_red_odds)
         ft5_blue_edge, ft5_blue_units, ft5_blue_label, ft5_blue_impl = calc_edge(blue_ft5_conf, ft5_blue_odds)
@@ -544,8 +628,8 @@ if predict_btn:
             b_form - r_form, b_wr - r_wr, b_champ_wr - r_champ_wr)
 
         ft5_conf_level, ft5_conf_desc, ft5_reasons, ft5_warnings = model_confidence(
-            ft5_team_games.get(blue_team, 0) if blue_team else 0,
-            ft5_team_games.get(red_team,  0) if red_team  else 0,
+            ft5_team_games.get(blue_team_norm, 0) if blue_team_norm else 0,
+            ft5_team_games.get(red_team_norm,  0) if red_team_norm  else 0,
             ft5_h2h_tot,
             b_early_form - r_early_form,
             b_early - r_early,
@@ -632,10 +716,13 @@ if predict_btn:
 
         st.divider()
 
-        # Match winner
+        # =============================================================
+        # MATCH WINNER
+        # =============================================================
         st.markdown("### 🏆 Match Winner")
         winner_color = "🔵" if blue_win_conf > red_win_conf else "🔴"
         st.markdown(f"#### {winner_color} Model pick: **{win_winner}**")
+
         wc1, wc2 = st.columns(2)
         with wc1:
             st.metric(f"🔵 {blue_team_name}", f"{blue_win_conf*100:.1f}%",
@@ -653,6 +740,14 @@ if predict_btn:
             if red_win_conf > blue_win_conf:
                 st.info(f"💰 {win_red_units}u — {win_red_label}" if win_red_units > 0
                         else "💰 ⛔ SKIP")
+
+        # Draft only win
+        if blue_draft_win is not None:
+            draft_win_favour = blue_team_name if blue_draft_win > red_draft_win else red_team_name
+            draft_win_color  = "🔵" if blue_draft_win > red_draft_win else "🔴"
+            st.caption(f"⚖️ Draft-only (equal teams): "
+                       f"🔵 {blue_draft_win*100:.1f}% vs 🔴 {red_draft_win*100:.1f}% "
+                       f"— {draft_win_color} {draft_win_favour} has better draft")
 
         st.markdown(f"**📊 Model confidence: {win_conf_level}** — {win_conf_desc}")
         for r in win_reasons:
@@ -722,11 +817,14 @@ if predict_btn:
 
         st.divider()
 
-        # First to five
+        # =============================================================
+        # FIRST TO FIVE
+        # =============================================================
         st.markdown("### ⚔️ First to Five Kills")
         ft5_color = "🔵" if blue_ft5_conf > red_ft5_conf else "🔴"
         st.markdown(f"#### {ft5_color} Model pick: **{ft5_winner}**")
         st.caption(f"⏱️ Est. 5 kills at ~minute {est_time:.1f} ({faster_team} historically faster)")
+
         fc1, fc2 = st.columns(2)
         with fc1:
             st.metric(f"🔵 {blue_team_name}", f"{blue_ft5_conf*100:.1f}%",
@@ -744,6 +842,14 @@ if predict_btn:
             if red_ft5_conf > blue_ft5_conf:
                 st.info(f"💰 {ft5_red_units}u — {ft5_red_label}" if ft5_red_units > 0
                         else "💰 ⛔ SKIP")
+
+        # Draft only FT5
+        if blue_draft_ft5 is not None:
+            draft_ft5_favour = blue_team_name if blue_draft_ft5 > red_draft_ft5 else red_team_name
+            draft_ft5_color  = "🔵" if blue_draft_ft5 > red_draft_ft5 else "🔴"
+            st.caption(f"⚖️ Draft-only (equal teams): "
+                       f"🔵 {blue_draft_ft5*100:.1f}% vs 🔴 {red_draft_ft5*100:.1f}% "
+                       f"— {draft_ft5_color} {draft_ft5_favour} has more aggressive draft")
 
         st.markdown(f"**📊 Model confidence: {ft5_conf_level}** — {ft5_conf_desc}")
         for r in ft5_reasons:
