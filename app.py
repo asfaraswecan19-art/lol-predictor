@@ -6,6 +6,8 @@ import pickle
 import requests
 import difflib
 import re
+import json
+from datetime import datetime
 
 st.set_page_config(
     page_title="LoL Match Predictor",
@@ -25,8 +27,36 @@ TEAM_ALIASES = {
     'BDS':      'Team Shifters',
 }
 
+LEAGUE_MAP = {
+    'T1': 'LCK', 'Gen.G': 'LCK', 'Hanwha Life Esports': 'LCK', 'Dplus KIA': 'LCK',
+    'KT Rolster': 'LCK', 'DRX': 'LCK', 'BNK FEARX': 'LCK', 'DN SOOPers': 'LCK',
+    'Nongshim RedForce': 'LCK', 'HANJIN BRION': 'LCK',
+    'G2 Esports': 'LEC', 'Fnatic': 'LEC', 'Team Vitality': 'LEC', 'Karmine Corp': 'LEC',
+    'Team Heretics': 'LEC', 'Movistar KOI': 'LEC', 'GIANTX': 'LEC', 'SK Gaming': 'LEC',
+    'Natus Vincere': 'LEC', 'Team Shifters': 'LEC',
+    'Cloud9': 'LCS', 'Team Liquid': 'LCS', 'FlyQuest': 'LCS', 'Sentinels': 'LCS',
+    'Shopify Rebellion': 'LCS', 'Dignitas': 'LCS', 'LYON': 'LCS', 'Disguised': 'LCS',
+    'RED Canids': 'CBLOL', 'Fluxo W7M': 'CBLOL', 'FURIA': 'CBLOL', 'Keyd Stars': 'CBLOL',
+    'LOUD': 'CBLOL', 'paiN Gaming': 'CBLOL', 'Leviatán': 'CBLOL', 'LOS': 'CBLOL',
+    "Anyone's Legend": 'LPL', 'Bilibili Gaming': 'LPL', 'JD Gaming': 'LPL',
+    'Top Esports': 'LPL', 'Weibo Gaming': 'LPL', 'Invictus Gaming': 'LPL',
+    'EDward Gaming': 'LPL', 'Ninjas in Pyjamas': 'LPL', 'Team WE': 'LPL',
+    'ThunderTalk Gaming': 'LPL', 'LGD Gaming': 'LPL', 'LNG Esports': 'LPL',
+    'Oh My God': 'LPL', 'Ultra Prime': 'LPL',
+    'FunPlus Phoenix': 'LPL', 'Rare Atom': 'LPL', 'Wolves Esports': 'LPL',
+}
+
 def normalize_team(name):
     return TEAM_ALIASES.get(str(name), str(name))
+
+def get_league(team_name):
+    if not team_name: return ''
+    return LEAGUE_MAP.get(team_name, '')
+
+def conf_short(level):
+    if 'HIGH'   in level: return 'High'
+    if 'MEDIUM' in level: return 'Med'
+    return 'Low'
 
 def rate_champ(win_rate, pc_rate):
     combined = (win_rate + pc_rate) / 2
@@ -46,49 +76,37 @@ def model_confidence(b_games, r_games, h2h_total,
     warnings_list = []
     min_games = min(b_games, r_games)
     if min_games >= 50:
-        score += 3
-        reasons.append(f"Strong team history ({min_games}+ games each)")
+        score += 3; reasons.append(f"Strong team history ({min_games}+ games each)")
     elif min_games >= 20:
-        score += 2
-        reasons.append(f"Decent team history ({min_games}+ games each)")
+        score += 2; reasons.append(f"Decent team history ({min_games}+ games each)")
     elif min_games >= 10:
-        score += 1
-        reasons.append(f"Limited team history ({min_games} games)")
+        score += 1; reasons.append(f"Limited team history ({min_games} games)")
     else:
         warnings_list.append(f"Very little team data ({min_games} games)")
     if h2h_total >= 10:
-        score += 3
-        reasons.append(f"Strong H2H record ({h2h_total} games)")
+        score += 3; reasons.append(f"Strong H2H record ({h2h_total} games)")
     elif h2h_total >= 5:
-        score += 2
-        reasons.append(f"Some H2H history ({h2h_total} games)")
+        score += 2; reasons.append(f"Some H2H history ({h2h_total} games)")
     elif h2h_total >= 2:
-        score += 1
-        reasons.append(f"Limited H2H ({h2h_total} games)")
+        score += 1; reasons.append(f"Limited H2H ({h2h_total} games)")
     else:
         warnings_list.append("No H2H history — using defaults")
     signals = [
         1 if winrate_diff > 0.05 else (-1 if winrate_diff < -0.05 else 0),
-        1 if form_diff > 0.1 else (-1 if form_diff < -0.1 else 0),
-        1 if champ_diff > 0.02 else (-1 if champ_diff < -0.02 else 0),
+        1 if form_diff > 0.1    else (-1 if form_diff    < -0.1  else 0),
+        1 if champ_diff > 0.02  else (-1 if champ_diff   < -0.02 else 0),
     ]
     non_zero = [s for s in signals if s != 0]
     if len(non_zero) >= 2:
         if all(s == non_zero[0] for s in non_zero):
-            score += 3
-            reasons.append("All signals agree")
+            score += 3; reasons.append("All signals agree")
         else:
-            score += 1
-            warnings_list.append("Mixed signals")
+            score += 1; warnings_list.append("Mixed signals")
     else:
-        score += 1
-        warnings_list.append("Weak signal strength")
-    if score >= 7:
-        level, desc = "🟢 HIGH", "Strong data, clear favourite"
-    elif score >= 4:
-        level, desc = "🟡 MEDIUM", "Reasonable data, some uncertainty"
-    else:
-        level, desc = "🔴 LOW", "Limited data or conflicting signals"
+        score += 1; warnings_list.append("Weak signal strength")
+    if score >= 7:   level, desc = "🟢 HIGH",   "Strong data, clear favourite"
+    elif score >= 4: level, desc = "🟡 MEDIUM", "Reasonable data, some uncertainty"
+    else:            level, desc = "🔴 LOW",    "Limited data or conflicting signals"
     return level, desc, reasons, warnings_list
 
 @st.cache_resource
@@ -108,7 +126,7 @@ win_champ_rate   = p['win_champ_rate']
 win_h2h          = p['win_h2h']
 win_team_recent  = p['win_team_recent']
 pc_rate          = p['pc_rate']
-pc_games         = p['pc_games']
+pc_games_d       = p['pc_games']
 role_champ_rate  = p['role_champ_rate']
 ft5_model        = p['ft5_model']
 ft5_mlb          = p['ft5_mlb']
@@ -134,61 +152,41 @@ CHAMP_LOOKUP = {
 }
 
 def fuzzy_match_champion(raw, threshold=0.6):
-    if not raw or not raw.strip():
-        return None
+    if not raw or not raw.strip(): return None
     clean = raw.strip().lower().replace("'","").replace(" ","").replace("&","").replace(".","").replace("-","")
-    if clean in CHAMP_LOOKUP:
-        return CHAMP_LOOKUP[clean]
+    if clean in CHAMP_LOOKUP: return CHAMP_LOOKUP[clean]
     matches = difflib.get_close_matches(clean, CHAMP_LOOKUP.keys(), n=1, cutoff=threshold)
     return CHAMP_LOOKUP[matches[0]] if matches else None
 
 def fuzzy_match_team(raw):
-    if not raw or not raw.strip():
-        return None
+    if not raw or not raw.strip(): return None
     raw_strip = raw.strip()
     normed = normalize_team(raw_strip)
-    if normed != raw_strip and normed in all_teams:
-        return normed
+    if normed != raw_strip and normed in all_teams: return normed
     for t in all_teams:
-        if raw_strip.lower() == t.lower():
-            return t
+        if raw_strip.lower() == t.lower(): return t
     raw_clean = raw_strip.lower().replace(" ","")
     team_map  = {t.lower().replace(" ",""): t for t in all_teams}
     matches   = difflib.get_close_matches(raw_clean, team_map.keys(), n=1, cutoff=0.7)
     return team_map[matches[0]] if matches else None
 
 def parse_champion_input(text):
-    if not text or not text.strip():
-        return []
+    if not text or not text.strip(): return []
     parts = re.split(r'[\t,]+', text.strip())
-    if len(parts) < 5:
-        parts = re.split(r'\s+', text.strip())
+    if len(parts) < 5: parts = re.split(r'\s+', text.strip())
     champs = []
     i = 0
     while i < len(parts) and len(champs) < 5:
         word = parts[i].strip()
-        if not word:
-            i += 1
-            continue
+        if not word: i += 1; continue
         match = fuzzy_match_champion(word)
-        if match:
-            champs.append(match)
-            i += 1
-            continue
+        if match: champs.append(match); i += 1; continue
         if i + 1 < len(parts):
-            combined = word + " " + parts[i+1].strip()
-            match2 = fuzzy_match_champion(combined)
-            if match2:
-                champs.append(match2)
-                i += 2
-                continue
+            m2 = fuzzy_match_champion(word + " " + parts[i+1].strip())
+            if m2: champs.append(m2); i += 2; continue
         if i + 2 < len(parts):
-            combined3 = word + " " + parts[i+1].strip() + " " + parts[i+2].strip()
-            match3 = fuzzy_match_champion(combined3)
-            if match3:
-                champs.append(match3)
-                i += 3
-                continue
+            m3 = fuzzy_match_champion(word + " " + parts[i+1].strip() + " " + parts[i+2].strip())
+            if m3: champs.append(m3); i += 3; continue
         i += 1
     return champs
 
@@ -281,9 +279,7 @@ def get_draft_only_prediction(blue, red, b_champ_wr, r_champ_wr, b_pc_avg, r_pc_
         'h2h_winrate','blue_form','red_form','form_diff',
         'blue_side_advantage','blue_pc_avg','red_pc_avg','pc_avg_diff',
     ])
-    win_prob = win_model.predict_proba(
-        pd.concat([b_win_enc, r_win_enc, neutral_row], axis=1))[0]
-
+    win_prob = win_model.predict_proba(pd.concat([b_win_enc, r_win_enc, neutral_row], axis=1))[0]
     b_ft5_enc = pd.DataFrame(ft5_mlb.transform([blue]),
         columns=['blue_' + c for c in ft5_mlb.classes_])
     r_ft5_enc = pd.DataFrame(ft5_mlb.transform([red]),
@@ -291,7 +287,7 @@ def get_draft_only_prediction(blue, red, b_champ_wr, r_champ_wr, b_pc_avg, r_pc_
     b_agg = sum(champ_aggression.get(c, 0.5) for c in blue) / len(blue)
     r_agg = sum(champ_aggression.get(c, 0.5) for c in red)  / len(red)
     neutral_ft5 = pd.DataFrame([[
-        b_agg, r_agg, b_agg - r_agg,
+        b_agg, r_agg, b_agg-r_agg,
         0.5, 0.5, 0.0, 10.0, 10.0, 0.0,
         0.5, 0.5, 0.5, 0.0,
     ]], columns=[
@@ -300,32 +296,67 @@ def get_draft_only_prediction(blue, red, b_champ_wr, r_champ_wr, b_pc_avg, r_pc_
         'blue_kill_speed','red_kill_speed','speed_diff',
         'h2h_early_rate','blue_early_form','red_early_form','early_form_diff',
     ])
-    ft5_prob = ft5_model.predict_proba(
-        pd.concat([b_ft5_enc, r_ft5_enc, neutral_ft5], axis=1))[0]
+    ft5_prob = ft5_model.predict_proba(pd.concat([b_ft5_enc, r_ft5_enc, neutral_ft5], axis=1))[0]
     return win_prob[1], win_prob[0], ft5_prob[1], ft5_prob[0]
 
 def send_discord_dm(message):
     try:
-        token = st.secrets["DISCORD_BOT_TOKEN"]
+        token   = st.secrets["DISCORD_BOT_TOKEN"]
         headers = {"Authorization": f"Bot {token}", "Content-Type": "application/json"}
         dm_resp = requests.post(
             "https://discord.com/api/v10/users/@me/channels",
-            headers=headers,
-            json={"recipient_id": DISCORD_USER_ID},
-            timeout=10
-        )
-        if dm_resp.status_code not in [200, 201]:
-            return False
+            headers=headers, json={"recipient_id": DISCORD_USER_ID}, timeout=10)
+        if dm_resp.status_code not in [200, 201]: return False
         channel_id = dm_resp.json()["id"]
         msg_resp = requests.post(
             f"https://discord.com/api/v10/channels/{channel_id}/messages",
-            headers=headers,
-            json={"content": message},
-            timeout=10
-        )
+            headers=headers, json={"content": message}, timeout=10)
         return msg_resp.status_code in [200, 201]
     except Exception:
         return False
+
+def log_to_sheets(row_data):
+    """Append a row to the Dashboard sheet via Google Sheets API."""
+    try:
+        creds_json = json.loads(st.secrets["GOOGLE_SERVICE_ACCOUNT"])
+        sheet_id   = st.secrets["GOOGLE_SHEETS_ID"]
+
+        # Get access token
+        import urllib.parse
+        import time
+        import hmac
+        import hashlib
+        import base64
+
+        # Use requests to get OAuth token via service account
+        import google.auth
+        from google.oauth2 import service_account
+        from googleapiclient.discovery import build
+
+        creds = service_account.Credentials.from_service_account_info(
+            creds_json,
+            scopes=["https://www.googleapis.com/auth/spreadsheets"]
+        )
+        service = build("sheets", "v4", credentials=creds)
+
+        # Find next empty row in Dashboard
+        result = service.spreadsheets().values().get(
+            spreadsheetId=sheet_id,
+            range="Dashboard!A:A"
+        ).execute()
+        values    = result.get("values", [])
+        next_row  = max(21, len(values) + 1)
+
+        # Append the row
+        service.spreadsheets().values().update(
+            spreadsheetId=sheet_id,
+            range=f"Dashboard!A{next_row}:J{next_row}",
+            valueInputOption="USER_ENTERED",
+            body={"values": [row_data]}
+        ).execute()
+        return True
+    except Exception as e:
+        return False, str(e)
 
 def get_claude_reasoning(
         blue_team, red_team, blue_picks, red_picks,
@@ -375,11 +406,9 @@ Be specific about champion picks, player strengths, and game style. Keep it conc
     try:
         response = requests.post(
             "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": st.secrets["ANTHROPIC_API_KEY"],
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json"
-            },
+            headers={"x-api-key": st.secrets["ANTHROPIC_API_KEY"],
+                     "anthropic-version": "2023-06-01",
+                     "content-type": "application/json"},
             json={"model": "claude-sonnet-4-5", "max_tokens": 600,
                   "messages": [{"role": "user", "content": prompt}]},
             timeout=30
@@ -417,11 +446,9 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.markdown("### 🔵 Blue Side")
-    blue_team_raw = st.text_input("Team name", key='blue_team_input',
-                                   placeholder="e.g. T1, Gen.G, Cloud9...")
+    blue_team_raw   = st.text_input("Team name", key='blue_team_input',
+                                     placeholder="e.g. T1, Gen.G, Cloud9...")
     blue_team_match = fuzzy_match_team(blue_team_raw) if blue_team_raw else None
-
-    # Auto-fill players when team recognized
     if blue_team_match and blue_team_match in team_lineups:
         lineup = team_lineups[blue_team_match]
         if isinstance(lineup, dict):
@@ -430,7 +457,6 @@ with col1:
             if not st.session_state['blue_p_mid']: st.session_state['blue_p_mid'] = lineup.get('mid','')
             if not st.session_state['blue_p_adc']: st.session_state['blue_p_adc'] = lineup.get('adc','')
             if not st.session_state['blue_p_sup']: st.session_state['blue_p_sup'] = lineup.get('sup','')
-
     if blue_team_raw and blue_team_match:
         st.caption(f"✅ Matched: {blue_team_match}")
     elif blue_team_raw and not blue_team_match:
@@ -445,7 +471,7 @@ with col1:
         if len(blue_parsed) == 5:
             st.caption(f"✅ {' | '.join([f'{POS_LABELS[i]}: {blue_parsed[i]}' for i in range(5)])}")
         else:
-            st.caption(f"⚠️ Parsed {len(blue_parsed)}/5 champions — {', '.join(blue_parsed) if blue_parsed else 'none recognized'}")
+            st.caption(f"⚠️ Parsed {len(blue_parsed)}/5 — {', '.join(blue_parsed) if blue_parsed else 'none recognized'}")
 
     st.markdown("**Players (optional)**")
     blue_p_top = st.text_input("Top",     key='blue_p_top')
@@ -456,10 +482,9 @@ with col1:
 
 with col2:
     st.markdown("### 🔴 Red Side")
-    red_team_raw = st.text_input("Team name", key='red_team_input',
-                                  placeholder="e.g. T1, Gen.G, Cloud9...")
+    red_team_raw   = st.text_input("Team name", key='red_team_input',
+                                    placeholder="e.g. T1, Gen.G, Cloud9...")
     red_team_match = fuzzy_match_team(red_team_raw) if red_team_raw else None
-
     if red_team_match and red_team_match in team_lineups:
         lineup = team_lineups[red_team_match]
         if isinstance(lineup, dict):
@@ -468,7 +493,6 @@ with col2:
             if not st.session_state['red_p_mid']: st.session_state['red_p_mid'] = lineup.get('mid','')
             if not st.session_state['red_p_adc']: st.session_state['red_p_adc'] = lineup.get('adc','')
             if not st.session_state['red_p_sup']: st.session_state['red_p_sup'] = lineup.get('sup','')
-
     if red_team_raw and red_team_match:
         st.caption(f"✅ Matched: {red_team_match}")
     elif red_team_raw and not red_team_match:
@@ -483,7 +507,7 @@ with col2:
         if len(red_parsed) == 5:
             st.caption(f"✅ {' | '.join([f'{POS_LABELS[i]}: {red_parsed[i]}' for i in range(5)])}")
         else:
-            st.caption(f"⚠️ Parsed {len(red_parsed)}/5 champions — {', '.join(red_parsed) if red_parsed else 'none recognized'}")
+            st.caption(f"⚠️ Parsed {len(red_parsed)}/5 — {', '.join(red_parsed) if red_parsed else 'none recognized'}")
 
     st.markdown("**Players (optional)**")
     red_p_top = st.text_input("Top",     key='red_p_top')
@@ -492,7 +516,6 @@ with col2:
     red_p_adc = st.text_input("ADC",     key='red_p_adc')
     red_p_sup = st.text_input("Support", key='red_p_sup')
 
-# Game number + odds
 gc1, gc2, gc3 = st.columns([1, 2, 2])
 with gc1:
     game_number = st.text_input("Game #", key='game_number', placeholder="1, 2, 3...")
@@ -659,51 +682,69 @@ if predict_btn:
         ft5_caution = 0.60 <= max(blue_ft5_conf, red_ft5_conf) < 0.65
 
         # =============================================================
+        # GOOGLE SHEETS LOGGING — FT5 only
+        # Columns: A Date | B Series | C Map# | D League | E Bet (pick)
+        #          F blank | G Bot Rec | H Confidence | I Model% | J Odds
+        # =============================================================
+        ft5_pick      = blue_team_name if blue_ft5_conf > red_ft5_conf else red_team_name
+        ft5_pick_conf = max(blue_ft5_conf, red_ft5_conf)
+        ft5_pick_odds = ft5_blue_odds if blue_ft5_conf > red_ft5_conf else ft5_red_odds
+        ft5_pick_units= ft5_blue_units if blue_ft5_conf > red_ft5_conf else ft5_red_units
+        ft5_pick_label= ft5_blue_label if blue_ft5_conf > red_ft5_conf else ft5_red_label
+        series_str    = f"{blue_team_name} vs {red_team_name}"
+        league_str    = get_league(blue_team_norm or red_team_norm)
+        map_str       = game_number.strip() if game_number.strip() else ""
+        bot_rec_str   = str(ft5_pick_units) if ft5_pick_units > 0 else "Skip"
+
+        sheets_row = [
+            datetime.now().strftime("%m/%d/%Y"),  # A: Date
+            series_str,                            # B: Series
+            map_str,                               # C: Map #
+            league_str,                            # D: League
+            ft5_pick,                              # E: Bet (FT5 pick)
+            "",                                    # F: Units Placed (you fill in)
+            bot_rec_str,                           # G: Bot Recommended
+            conf_short(ft5_conf_level),            # H: Confidence
+            round(ft5_pick_conf * 100, 1),         # I: Model %
+            ft5_pick_odds,                         # J: Odds
+        ]
+        sheets_ok = log_to_sheets(sheets_row)
+
+        # =============================================================
         # DISCORD DM
         # =============================================================
         win_pick    = blue_team_name if blue_win_conf > red_win_conf else red_team_name
         win_pct     = max(blue_win_conf, red_win_conf) * 100
-        win_edge    = max(win_blue_edge, win_red_edge) * 100
+        win_edge_d  = max(win_blue_edge, win_red_edge) * 100
         win_units_d = win_blue_units if blue_win_conf > red_win_conf else win_red_units
         win_label_d = win_blue_label if blue_win_conf > red_win_conf else win_red_label
         win_odds_d  = win_blue_odds  if blue_win_conf > red_win_conf else win_red_odds
-
-        ft5_pick    = blue_team_name if blue_ft5_conf > red_ft5_conf else red_team_name
-        ft5_pct     = max(blue_ft5_conf, red_ft5_conf) * 100
-        ft5_edge    = max(ft5_blue_edge, ft5_red_edge) * 100
-        ft5_units_d = ft5_blue_units if blue_ft5_conf > red_ft5_conf else ft5_red_units
-        ft5_label_d = ft5_blue_label if blue_ft5_conf > red_ft5_conf else ft5_red_label
-        ft5_odds_d  = ft5_blue_odds  if blue_ft5_conf > red_ft5_conf else ft5_red_odds
-
-        game_str = f" — {game_label}" if game_label else ""
+        ft5_edge_d  = max(ft5_blue_edge, ft5_red_edge) * 100
+        game_str    = f" — {game_label}" if game_label else ""
 
         draft_win_str = ""
         draft_ft5_str = ""
         if bdw is not None:
             dw_pick = blue_team_name if bdw > rdw else red_team_name
             df_pick = blue_team_name if bdf > rdf else red_team_name
-            draft_win_str = f"\n⚖️ Draft-only Win: 🔵 {bdw*100:.1f}% vs 🔴 {rdw*100:.1f}% — {dw_pick}"
-            draft_ft5_str = f"\n⚖️ Draft-only FT5: 🔵 {bdf*100:.1f}% vs 🔴 {rdf*100:.1f}% — {df_pick}"
+            draft_win_str = f"\n⚖️ Draft Win: 🔵 {bdw*100:.1f}% vs 🔴 {rdw*100:.1f}% — {dw_pick}"
+            draft_ft5_str = f"\n⚖️ Draft FT5: 🔵 {bdf*100:.1f}% vs 🔴 {rdf*100:.1f}% — {df_pick}"
 
         discord_msg = f"""🎮 **{blue_team_name} vs {red_team_name}**{game_str}
 
-🏆 **WINNER: {win_pick}** {win_pct:.1f}% | Edge: +{win_edge:.1f}% | Odds: {win_odds_d} | {win_units_d}u {win_label_d}
-⚔️ **FT5: {ft5_pick}** {ft5_pct:.1f}% | Edge: +{ft5_edge:.1f}% | Odds: {ft5_odds_d} | {ft5_units_d}u {ft5_label_d}
+🏆 **WINNER: {win_pick}** {win_pct:.1f}% | Edge: +{win_edge_d:.1f}% | Odds: {win_odds_d} | {win_units_d}u {win_label_d}
+⚔️ **FT5: {ft5_pick}** {ft5_pick_conf*100:.1f}% | Edge: +{ft5_edge_d:.1f}% | Odds: {ft5_pick_odds} | {bot_rec_str}u {ft5_pick_label}
 📊 Win confidence: {win_conf_level} | FT5 confidence: {ft5_conf_level}{draft_win_str}{draft_ft5_str}"""
 
         discord_sent = send_discord_dm(discord_msg)
 
         st.divider()
 
-        # Title with game number
         match_title = f"### {blue_team_name} vs {red_team_name}"
-        if game_label:
-            match_title += f" — {game_label}"
+        if game_label: match_title += f" — {game_label}"
         st.markdown(match_title)
 
-        # =============================================================
-        # TEAM STATS
-        # =============================================================
+        # Team Stats
         with st.expander("📋 Team Stats", expanded=False):
             sc1, sc2 = st.columns(2)
             with sc1:
@@ -724,9 +765,7 @@ if predict_btn:
             with hc2:
                 st.write(f"Early H2H: {blue_team_name} {b_ft5_h2h}–{r_ft5_h2h} {red_team_name}")
 
-        # =============================================================
-        # MATCH WINNER
-        # =============================================================
+        # Match Winner
         st.markdown("### 🏆 Match Winner")
         winner_color = "🔵" if blue_win_conf > red_win_conf else "🔴"
         st.markdown(f"#### {winner_color} Model pick: **{win_winner}**")
@@ -752,8 +791,7 @@ if predict_btn:
             st.caption(f"⚖️ Draft-only: 🔵 {bdw*100:.1f}% vs 🔴 {rdw*100:.1f}% — {dw} {dn} has better draft")
 
         st.markdown(f"**📊 Confidence: {win_conf_level}** — {win_conf_desc}")
-        for r in win_reasons:
-            st.write(f"✔ {r}")
+        for r in win_reasons: st.write(f"✔ {r}")
         for w in win_warnings:
             if "Mixed signals" in w:
                 wr_dir    = f"🔵 {blue_team_name}" if b_wr > r_wr else f"🔴 {red_team_name}"
@@ -791,12 +829,12 @@ if predict_btn:
                     st.markdown(f"**🔵 {blue_team_name}**")
                     for i, champ in enumerate(blue):
                         player  = blue_players[i] if i < len(blue_players) else ''
-                        cwr     = win_champ_rate.get(champ, 0.5)
                         pos     = POSITIONS[i] if i < len(POSITIONS) else 'unknown'
                         rc_val  = role_champ_rate.get((pos, champ.strip()), 0.5)
                         pc_val  = pc_rate.get((player.strip(), champ.strip()), 0.5) if player.strip() else rc_val
-                        pcg     = pc_games.get((player.strip(), champ.strip()), 0) if player.strip() else 0
+                        pcg     = pc_games_d.get((player.strip(), champ.strip()), 0) if player.strip() else 0
                         blended = PC_WEIGHT * pc_val + RC_WEIGHT * rc_val
+                        cwr     = win_champ_rate.get(champ, 0.5)
                         rating  = rate_champ(cwr, blended)
                         lbl     = POS_LABELS[i] if i < len(POS_LABELS) else ''
                         name    = player if player.strip() else "Unknown"
@@ -806,12 +844,12 @@ if predict_btn:
                     st.markdown(f"**🔴 {red_team_name}**")
                     for i, champ in enumerate(red):
                         player  = red_players[i] if i < len(red_players) else ''
-                        cwr     = win_champ_rate.get(champ, 0.5)
                         pos     = POSITIONS[i] if i < len(POSITIONS) else 'unknown'
                         rc_val  = role_champ_rate.get((pos, champ.strip()), 0.5)
                         pc_val  = pc_rate.get((player.strip(), champ.strip()), 0.5) if player.strip() else rc_val
-                        pcg     = pc_games.get((player.strip(), champ.strip()), 0) if player.strip() else 0
+                        pcg     = pc_games_d.get((player.strip(), champ.strip()), 0) if player.strip() else 0
                         blended = PC_WEIGHT * pc_val + RC_WEIGHT * rc_val
+                        cwr     = win_champ_rate.get(champ, 0.5)
                         rating  = rate_champ(cwr, blended)
                         lbl     = POS_LABELS[i] if i < len(POS_LABELS) else ''
                         name    = player if player.strip() else "Unknown"
@@ -820,9 +858,7 @@ if predict_btn:
 
         st.divider()
 
-        # =============================================================
-        # FIRST TO FIVE
-        # =============================================================
+        # First to Five
         st.markdown("### ⚔️ First to Five Kills")
         ft5_color = "🔵" if blue_ft5_conf > red_ft5_conf else "🔴"
         st.markdown(f"#### {ft5_color} Model pick: **{ft5_winner}**")
@@ -849,8 +885,7 @@ if predict_btn:
             st.caption(f"⚖️ Draft-only: 🔵 {bdf*100:.1f}% vs 🔴 {rdf*100:.1f}% — {df5} {dn5} more aggressive draft")
 
         st.markdown(f"**📊 Confidence: {ft5_conf_level}** — {ft5_conf_desc}")
-        for r in ft5_reasons:
-            st.write(f"✔ {r}")
+        for r in ft5_reasons: st.write(f"✔ {r}")
         for w in ft5_warnings:
             if "Mixed signals" in w:
                 early_dir = f"🔵 {blue_team_name}" if b_early > r_early else f"🔴 {red_team_name}"
@@ -909,9 +944,6 @@ if predict_btn:
 
         st.divider()
 
-        # =============================================================
-        # AI ANALYSIS
-        # =============================================================
         if len(blue) == 5 and len(red) == 5:
             with st.expander("🤖 AI Analysis", expanded=False):
                 with st.spinner("Generating analysis..."):
@@ -928,10 +960,17 @@ if predict_btn:
                         ft5_blue_odds, ft5_red_odds)
                 st.write(reasoning)
 
+        # Status line
+        status_parts = []
         if discord_sent:
-            st.caption("📨 Discord DM sent")
+            status_parts.append("📨 Discord DM sent")
         else:
-            st.caption("⚠️ Discord DM failed — check bot token in secrets")
+            status_parts.append("⚠️ Discord DM failed")
+        if sheets_ok is True:
+            status_parts.append("📊 Logged to Google Sheets")
+        else:
+            status_parts.append("⚠️ Google Sheets log failed")
+        st.caption(" | ".join(status_parts))
 
         st.divider()
         st.caption("~64.68% true accuracy | Trust 65%+ | Best ROI at 2.30+ odds")
