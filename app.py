@@ -69,7 +69,7 @@ def rate_agg(agg_score):
     elif agg_score >= 0.48: return "🟡 Average aggression"
     else:                   return "🔴 Low aggression"
 
-def model_confidence(b_games, r_games, h2h_total,
+def _confidence(b_games, r_games, h2h_total,
                      form_diff, winrate_diff, champ_diff):
     score = 0
     reasons = []
@@ -110,15 +110,15 @@ def model_confidence(b_games, r_games, h2h_total,
     return level, desc, reasons, warnings_list
 
 @st.cache_resource
-def load_models():
-    with open('model_payload.pkl', 'rb') as f:
+def load_s():
+    with open('_payload.pkl', 'rb') as f:
         p = pickle.load(f)
     return p
 
-with st.spinner("Loading models..."):
-    p = load_models()
+with st.spinner("Loading s..."):
+    p = load_s()
 
-win_model        = p['win_model']
+win_        = p['win_']
 win_mlb          = p['win_mlb']
 win_team_rate    = p['win_team_rate']
 win_team_games   = p['win_team_games']
@@ -128,7 +128,7 @@ win_team_recent  = p['win_team_recent']
 pc_rate          = p['pc_rate']
 pc_games_d       = p['pc_games']
 role_champ_rate  = p['role_champ_rate']
-ft5_model        = p['ft5_model']
+ft5_        = p['ft5_']
 ft5_mlb          = p['ft5_mlb']
 champ_aggression = p['champ_aggression']
 team_early_rate  = p['team_early_rate']
@@ -190,7 +190,7 @@ def parse_champion_input(text):
         i += 1
     return champs
 
-st.success("Models ready!")
+st.success("s ready!")
 
 defaults = {
     'blue_team_input': '', 'red_team_input': '',
@@ -279,7 +279,7 @@ def get_draft_only_prediction(blue, red, b_champ_wr, r_champ_wr, b_pc_avg, r_pc_
         'h2h_winrate','blue_form','red_form','form_diff',
         'blue_side_advantage','blue_pc_avg','red_pc_avg','pc_avg_diff',
     ])
-    win_prob = win_model.predict_proba(pd.concat([b_win_enc, r_win_enc, neutral_row], axis=1))[0]
+    win_prob = win_.predict_proba(pd.concat([b_win_enc, r_win_enc, neutral_row], axis=1))[0]
     b_ft5_enc = pd.DataFrame(ft5_mlb.transform([blue]),
         columns=['blue_' + c for c in ft5_mlb.classes_])
     r_ft5_enc = pd.DataFrame(ft5_mlb.transform([red]),
@@ -296,7 +296,7 @@ def get_draft_only_prediction(blue, red, b_champ_wr, r_champ_wr, b_pc_avg, r_pc_
         'blue_kill_speed','red_kill_speed','speed_diff',
         'h2h_early_rate','blue_early_form','red_early_form','early_form_diff',
     ])
-    ft5_prob = ft5_model.predict_proba(pd.concat([b_ft5_enc, r_ft5_enc, neutral_ft5], axis=1))[0]
+    ft5_prob = ft5_.predict_proba(pd.concat([b_ft5_enc, r_ft5_enc, neutral_ft5], axis=1))[0]
     return win_prob[1], win_prob[0], ft5_prob[1], ft5_prob[0]
 
 def send_discord_dm(message):
@@ -396,7 +396,7 @@ Win rate: {r_wr*100:.1f}% | Form: {r_form*100:.0f}% | H2H: {r_win_h2h}-{b_win_h2
 Champ quality: {r_champ_wr*100:.1f}% | Player-champ: {r_pc_avg*100:.1f}%
 Early rate: {r_early*100:.1f}% | Kill speed: {r_speed:.1f}m | Aggression: {r_agg*100:.1f}%
 
-MODEL: Winner {blue_team} {blue_win_conf*100:.1f}% vs {red_team} {red_win_conf*100:.1f}%
+: Winner {blue_team} {blue_win_conf*100:.1f}% vs {red_team} {red_win_conf*100:.1f}%
 FT5: {blue_team} {blue_ft5_conf*100:.1f}% vs {red_team} {red_ft5_conf*100:.1f}%
 
 1. MATCH WINNER REASONING (3-4 sentences): Why does the model favour {blue_team if blue_win_conf > red_win_conf else red_team}?
@@ -705,7 +705,7 @@ if predict_btn:
             "",                                    # F: Units Placed (you fill in)
             bot_rec_str,                           # G: Bot Recommended
             conf_short(ft5_conf_level),            # H: Confidence
-            round(ft5_pick_conf * 100, 1),         # I: Model %
+            round(ft5_pick_conf, 4),               # I: Model % (as decimal for sheet)
             ft5_pick_odds,                         # J: Odds
         ]
         sheets_ok = log_to_sheets(sheets_row)
