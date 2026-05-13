@@ -111,7 +111,7 @@ def _confidence(b_games, r_games, h2h_total,
 
 @st.cache_resource
 def load_s():
-    with open('_payload.pkl', 'rb') as f:
+    with open('model_payload.pkl', 'rb') as f:
         p = pickle.load(f)
     return p
 
