@@ -316,38 +316,20 @@ def send_discord_dm(message):
         return False
 
 def log_to_sheets(row_data):
-    """Append a row to the Dashboard sheet via Google Sheets API."""
     try:
         creds_json = json.loads(st.secrets["GOOGLE_SERVICE_ACCOUNT"])
         sheet_id   = st.secrets["GOOGLE_SHEETS_ID"]
-
-        # Get access token
-        import urllib.parse
-        import time
-        import hmac
-        import hashlib
-        import base64
-
-        # Use requests to get OAuth token via service account
-        import google.auth
         from google.oauth2 import service_account
         from googleapiclient.discovery import build
-
         creds = service_account.Credentials.from_service_account_info(
             creds_json,
             scopes=["https://www.googleapis.com/auth/spreadsheets"]
         )
         service = build("sheets", "v4", credentials=creds)
-
-        # Find next empty row in Dashboard
-        result = service.spreadsheets().values().get(
-            spreadsheetId=sheet_id,
-            range="Dashboard!A:A"
-        ).execute()
-        values    = result.get("values", [])
-        next_row  = max(21, len(values) + 1)
-
-        # Append the row
+        result  = service.spreadsheets().values().get(
+            spreadsheetId=sheet_id, range="Dashboard!A:A").execute()
+        values   = result.get("values", [])
+        next_row = max(21, len(values) + 1)
         service.spreadsheets().values().update(
             spreadsheetId=sheet_id,
             range=f"Dashboard!A{next_row}:J{next_row}",
@@ -356,7 +338,7 @@ def log_to_sheets(row_data):
         ).execute()
         return True
     except Exception as e:
-        return False, str(e)
+        return False
 
 def get_claude_reasoning(
         blue_team, red_team, blue_picks, red_picks,
@@ -532,6 +514,12 @@ with gc3:
     ft5_red_odds  = st.number_input("Red odds",  min_value=1.01, max_value=10.0,
                                      value=1.95, step=0.05, key="fro")
 
+chk_col1, chk_col2, chk_col3 = st.columns([2, 2, 3])
+with chk_col1:
+    send_discord = st.checkbox("📨 Send to Discord", value=True)
+with chk_col2:
+    send_sheets  = st.checkbox("📊 Log to Sheets", value=True)
+
 predict_btn = st.button("🔮 Predict", type="primary", use_container_width=True)
 
 # =================================================================
@@ -683,32 +671,31 @@ if predict_btn:
 
         # =============================================================
         # GOOGLE SHEETS LOGGING — FT5 only
-        # Columns: A Date | B Series | C Map# | D League | E Bet (pick)
-        #          F blank | G Bot Rec | H Confidence | I Model% | J Odds
         # =============================================================
-        ft5_pick      = blue_team_name if blue_ft5_conf > red_ft5_conf else red_team_name
-        ft5_pick_conf = max(blue_ft5_conf, red_ft5_conf)
-        ft5_pick_odds = ft5_blue_odds if blue_ft5_conf > red_ft5_conf else ft5_red_odds
-        ft5_pick_units= ft5_blue_units if blue_ft5_conf > red_ft5_conf else ft5_red_units
-        ft5_pick_label= ft5_blue_label if blue_ft5_conf > red_ft5_conf else ft5_red_label
-        series_str    = f"{blue_team_name} vs {red_team_name}"
-        league_str    = get_league(blue_team_norm or red_team_norm)
-        map_str       = game_number.strip() if game_number.strip() else ""
-        bot_rec_str   = str(ft5_pick_units) if ft5_pick_units > 0 else "Skip"
+        ft5_pick       = blue_team_name if blue_ft5_conf > red_ft5_conf else red_team_name
+        ft5_pick_conf  = max(blue_ft5_conf, red_ft5_conf)
+        ft5_pick_odds  = ft5_blue_odds if blue_ft5_conf > red_ft5_conf else ft5_red_odds
+        ft5_pick_units = ft5_blue_units if blue_ft5_conf > red_ft5_conf else ft5_red_units
+        ft5_pick_label = ft5_blue_label if blue_ft5_conf > red_ft5_conf else ft5_red_label
+        series_str     = f"{blue_team_name} vs {red_team_name}"
+        league_str     = get_league(blue_team_norm or red_team_norm)
+        map_str        = game_number.strip() if game_number.strip() else ""
+        bot_rec_str    = str(ft5_pick_units) if ft5_pick_units > 0 else "Skip"
 
         sheets_row = [
-            datetime.now().strftime("%m/%d/%Y"),  # A: Date
-            series_str,                            # B: Series
-            map_str,                               # C: Map #
-            league_str,                            # D: League
-            ft5_pick,                              # E: Bet (FT5 pick)
-            "",                                    # F: Units Placed (you fill in)
-            bot_rec_str,                           # G: Bot Recommended
-            conf_short(ft5_conf_level),            # H: Confidence
-            round(ft5_pick_conf * 100, 1),         # I: Model %
-            ft5_pick_odds,                         # J: Odds
+            datetime.now().strftime("%m/%d/%Y"),
+            series_str,
+            map_str,
+            league_str,
+            ft5_pick,
+            "",
+            bot_rec_str,
+            conf_short(ft5_conf_level),
+            round(ft5_pick_conf, 4),
+            ft5_pick_odds,
         ]
-        sheets_ok = log_to_sheets(sheets_row)
+
+        sheets_ok    = log_to_sheets(sheets_row) if send_sheets else None
 
         # =============================================================
         # DISCORD DM
@@ -736,7 +723,7 @@ if predict_btn:
 ⚔️ **FT5: {ft5_pick}** {ft5_pick_conf*100:.1f}% | Edge: +{ft5_edge_d:.1f}% | Odds: {ft5_pick_odds} | {bot_rec_str}u {ft5_pick_label}
 📊 Win confidence: {win_conf_level} | FT5 confidence: {ft5_conf_level}{draft_win_str}{draft_ft5_str}"""
 
-        discord_sent = send_discord_dm(discord_msg)
+        discord_sent = send_discord_dm(discord_msg) if send_discord else None
 
         st.divider()
 
@@ -960,17 +947,14 @@ if predict_btn:
                         ft5_blue_odds, ft5_red_odds)
                 st.write(reasoning)
 
-        # Status line
+        # Status
         status_parts = []
-        if discord_sent:
-            status_parts.append("📨 Discord DM sent")
-        else:
-            status_parts.append("⚠️ Discord DM failed")
-        if sheets_ok is True:
-            status_parts.append("📊 Logged to Google Sheets")
-        else:
-            status_parts.append("⚠️ Google Sheets log failed")
-        st.caption(" | ".join(status_parts))
+        if send_discord:
+            status_parts.append("📨 Discord DM sent" if discord_sent else "⚠️ Discord DM failed")
+        if send_sheets:
+            status_parts.append("📊 Logged to Sheets" if sheets_ok is True else "⚠️ Sheets log failed")
+        if status_parts:
+            st.caption(" | ".join(status_parts))
 
         st.divider()
         st.caption("~64.68% true accuracy | Trust 65%+ | Best ROI at 2.30+ odds")
