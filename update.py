@@ -106,6 +106,9 @@ os.system("git add app.py")
 os.system("git add model_payload.pkl")
 commit_msg    = f"auto-update {datetime.now().strftime('%Y-%m-%d %H:%M')}"
 commit_result = os.system(f'git commit -m "{commit_msg}"')
+os.system('attrib -r .git\\FETCH_HEAD 2>nul')
+os.system("git add .")
+os.system('git commit -m "pre-pull sync" 2>nul')
 os.system("git pull origin main --no-rebase")
 push_result   = os.system("git push origin main")
 if push_result == 0:
