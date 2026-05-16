@@ -69,7 +69,7 @@ def rate_agg(agg_score):
     elif agg_score >= 0.48: return "🟡 Average aggression"
     else:                   return "🔴 Low aggression"
 
-def _confidence(b_games, r_games, h2h_total,
+def model_confidence(b_games, r_games, h2h_total,
                      form_diff, winrate_diff, champ_diff):
     score = 0
     reasons = []
@@ -110,15 +110,15 @@ def _confidence(b_games, r_games, h2h_total,
     return level, desc, reasons, warnings_list
 
 @st.cache_resource
-def load_s():
-    with open('_payload.pkl', 'rb') as f:
+def load_models():
+    with open('model_payload.pkl', 'rb') as f:
         p = pickle.load(f)
     return p
 
-with st.spinner("Loading s..."):
-    p = load_s()
+with st.spinner("Loading models..."):
+    p = load_models()
 
-win_        = p['win_']
+win_model        = p['win_model']
 win_mlb          = p['win_mlb']
 win_team_rate    = p['win_team_rate']
 win_team_games   = p['win_team_games']
@@ -128,7 +128,7 @@ win_team_recent  = p['win_team_recent']
 pc_rate          = p['pc_rate']
 pc_games_d       = p['pc_games']
 role_champ_rate  = p['role_champ_rate']
-ft5_        = p['ft5_']
+ft5_model        = p['ft5_model']
 ft5_mlb          = p['ft5_mlb']
 champ_aggression = p['champ_aggression']
 team_early_rate  = p['team_early_rate']
@@ -190,7 +190,7 @@ def parse_champion_input(text):
         i += 1
     return champs
 
-st.success("s ready!")
+st.success("Models ready!")
 
 defaults = {
     'blue_team_input': '', 'red_team_input': '',
@@ -279,7 +279,7 @@ def get_draft_only_prediction(blue, red, b_champ_wr, r_champ_wr, b_pc_avg, r_pc_
         'h2h_winrate','blue_form','red_form','form_diff',
         'blue_side_advantage','blue_pc_avg','red_pc_avg','pc_avg_diff',
     ])
-    win_prob = win_.predict_proba(pd.concat([b_win_enc, r_win_enc, neutral_row], axis=1))[0]
+    win_prob = win_model.predict_proba(pd.concat([b_win_enc, r_win_enc, neutral_row], axis=1))[0]
     b_ft5_enc = pd.DataFrame(ft5_mlb.transform([blue]),
         columns=['blue_' + c for c in ft5_mlb.classes_])
     r_ft5_enc = pd.DataFrame(ft5_mlb.transform([red]),
@@ -296,7 +296,7 @@ def get_draft_only_prediction(blue, red, b_champ_wr, r_champ_wr, b_pc_avg, r_pc_
         'blue_kill_speed','red_kill_speed','speed_diff',
         'h2h_early_rate','blue_early_form','red_early_form','early_form_diff',
     ])
-    ft5_prob = ft5_.predict_proba(pd.concat([b_ft5_enc, r_ft5_enc, neutral_ft5], axis=1))[0]
+    ft5_prob = ft5_model.predict_proba(pd.concat([b_ft5_enc, r_ft5_enc, neutral_ft5], axis=1))[0]
     return win_prob[1], win_prob[0], ft5_prob[1], ft5_prob[0]
 
 def send_discord_dm(message):
@@ -315,39 +315,20 @@ def send_discord_dm(message):
     except Exception:
         return False
 
-def log_to_sheets(row_data):
-    """Append a row to the Dashboard sheet via Google Sheets API."""
+def log_to_sheets(row_data, sheet_id):
     try:
         creds_json = json.loads(st.secrets["GOOGLE_SERVICE_ACCOUNT"])
-        sheet_id   = st.secrets["GOOGLE_SHEETS_ID"]
-
-        # Get access token
-        import urllib.parse
-        import time
-        import hmac
-        import hashlib
-        import base64
-
-        # Use requests to get OAuth token via service account
-        import google.auth
         from google.oauth2 import service_account
         from googleapiclient.discovery import build
-
         creds = service_account.Credentials.from_service_account_info(
             creds_json,
             scopes=["https://www.googleapis.com/auth/spreadsheets"]
         )
-        service = build("sheets", "v4", credentials=creds)
-
-        # Find next empty row in Dashboard
-        result = service.spreadsheets().values().get(
-            spreadsheetId=sheet_id,
-            range="Dashboard!A:A"
-        ).execute()
-        values    = result.get("values", [])
-        next_row  = max(21, len(values) + 1)
-
-        # Append the row
+        service  = build("sheets", "v4", credentials=creds)
+        result   = service.spreadsheets().values().get(
+            spreadsheetId=sheet_id, range="Dashboard!A:A").execute()
+        values   = result.get("values", [])
+        next_row = max(9, len(values) + 1)
         service.spreadsheets().values().update(
             spreadsheetId=sheet_id,
             range=f"Dashboard!A{next_row}:J{next_row}",
@@ -355,8 +336,8 @@ def log_to_sheets(row_data):
             body={"values": [row_data]}
         ).execute()
         return True
-    except Exception as e:
-        return False, str(e)
+    except Exception:
+        return False
 
 def get_claude_reasoning(
         blue_team, red_team, blue_picks, red_picks,
@@ -396,7 +377,7 @@ Win rate: {r_wr*100:.1f}% | Form: {r_form*100:.0f}% | H2H: {r_win_h2h}-{b_win_h2
 Champ quality: {r_champ_wr*100:.1f}% | Player-champ: {r_pc_avg*100:.1f}%
 Early rate: {r_early*100:.1f}% | Kill speed: {r_speed:.1f}m | Aggression: {r_agg*100:.1f}%
 
-: Winner {blue_team} {blue_win_conf*100:.1f}% vs {red_team} {red_win_conf*100:.1f}%
+MODEL: Winner {blue_team} {blue_win_conf*100:.1f}% vs {red_team} {red_win_conf*100:.1f}%
 FT5: {blue_team} {blue_ft5_conf*100:.1f}% vs {red_team} {red_ft5_conf*100:.1f}%
 
 1. MATCH WINNER REASONING (3-4 sentences): Why does the model favour {blue_team if blue_win_conf > red_win_conf else red_team}?
@@ -531,6 +512,17 @@ with gc3:
                                      value=1.85, step=0.05, key="fbo")
     ft5_red_odds  = st.number_input("Red odds",  min_value=1.01, max_value=10.0,
                                      value=1.95, step=0.05, key="fro")
+
+# Checkboxes
+chk1, chk2, chk3, chk4 = st.columns(4)
+with chk1:
+    send_discord    = st.checkbox("📨 Discord",        value=True)
+with chk2:
+    send_ft5_sheet  = st.checkbox("📊 FT5 Sheet",      value=True)
+with chk3:
+    send_win_sheet  = st.checkbox("🏆 Winner Sheet",   value=True)
+with chk4:
+    st.empty()
 
 predict_btn = st.button("🔮 Predict", type="primary", use_container_width=True)
 
@@ -681,40 +673,45 @@ if predict_btn:
         win_caution = 0.60 <= max(blue_win_conf, red_win_conf) < 0.65
         ft5_caution = 0.60 <= max(blue_ft5_conf, red_ft5_conf) < 0.65
 
-        # =============================================================
-        # GOOGLE SHEETS LOGGING — FT5 only
-        # Columns: A Date | B Series | C Map# | D League | E Bet (pick)
-        #          F blank | G Bot Rec | H Confidence | I Model% | J Odds
-        # =============================================================
-        ft5_pick      = blue_team_name if blue_ft5_conf > red_ft5_conf else red_team_name
-        ft5_pick_conf = max(blue_ft5_conf, red_ft5_conf)
-        ft5_pick_odds = ft5_blue_odds if blue_ft5_conf > red_ft5_conf else ft5_red_odds
-        ft5_pick_units= ft5_blue_units if blue_ft5_conf > red_ft5_conf else ft5_red_units
-        ft5_pick_label= ft5_blue_label if blue_ft5_conf > red_ft5_conf else ft5_red_label
-        series_str    = f"{blue_team_name} vs {red_team_name}"
-        league_str    = get_league(blue_team_norm or red_team_norm)
-        map_str       = game_number.strip() if game_number.strip() else ""
-        bot_rec_str   = str(ft5_pick_units) if ft5_pick_units > 0 else "Skip"
+        # Shared row data fields
+        series_str  = f"{blue_team_name} vs {red_team_name}"
+        league_str  = get_league(blue_team_norm or red_team_norm)
+        map_str     = game_number.strip() if game_number.strip() else ""
+        today_str   = datetime.now().strftime("%m/%d/%Y")
 
-        sheets_row = [
-            datetime.now().strftime("%m/%d/%Y"),  # A: Date
-            series_str,                            # B: Series
-            map_str,                               # C: Map #
-            league_str,                            # D: League
-            ft5_pick,                              # E: Bet (FT5 pick)
-            "",                                    # F: Units Placed (you fill in)
-            bot_rec_str,                           # G: Bot Recommended
-            conf_short(ft5_conf_level),            # H: Confidence
-            round(ft5_pick_conf, 4),               # I: Model % (as decimal for sheet)
-            ft5_pick_odds,                         # J: Odds
+        # FT5 sheet row
+        ft5_pick       = blue_team_name if blue_ft5_conf > red_ft5_conf else red_team_name
+        ft5_pick_conf  = max(blue_ft5_conf, red_ft5_conf)
+        ft5_pick_odds  = ft5_blue_odds if blue_ft5_conf > red_ft5_conf else ft5_red_odds
+        ft5_pick_units = ft5_blue_units if blue_ft5_conf > red_ft5_conf else ft5_red_units
+        ft5_pick_label = ft5_blue_label if blue_ft5_conf > red_ft5_conf else ft5_red_label
+        ft5_bot_rec    = str(ft5_pick_units) if ft5_pick_units > 0 else "Skip"
+
+        ft5_row = [
+            today_str, series_str, map_str, league_str, ft5_pick,
+            "", ft5_bot_rec, conf_short(ft5_conf_level),
+            round(ft5_pick_conf, 4), ft5_pick_odds,
         ]
-        sheets_ok = log_to_sheets(sheets_row)
 
-        # =============================================================
-        # DISCORD DM
-        # =============================================================
-        win_pick    = blue_team_name if blue_win_conf > red_win_conf else red_team_name
-        win_pct     = max(blue_win_conf, red_win_conf) * 100
+        # Winner sheet row
+        win_pick       = blue_team_name if blue_win_conf > red_win_conf else red_team_name
+        win_pick_conf  = max(blue_win_conf, red_win_conf)
+        win_pick_odds  = win_blue_odds if blue_win_conf > red_win_conf else win_red_odds
+        win_pick_units = win_blue_units if blue_win_conf > red_win_conf else win_red_units
+        win_pick_label = win_blue_label if blue_win_conf > red_win_conf else win_red_label
+        win_bot_rec    = str(win_pick_units) if win_pick_units > 0 else "Skip"
+
+        winner_row = [
+            today_str, series_str, map_str, league_str, win_pick,
+            "", win_bot_rec, conf_short(win_conf_level),
+            round(win_pick_conf, 4), win_pick_odds,
+        ]
+
+        # Log to sheets
+        ft5_sheets_ok    = log_to_sheets(ft5_row,    st.secrets["GOOGLE_SHEETS_ID"])        if send_ft5_sheet else None
+        winner_sheets_ok = log_to_sheets(winner_row, st.secrets["GOOGLE_WINNER_SHEETS_ID"]) if send_win_sheet else None
+
+        # Discord DM
         win_edge_d  = max(win_blue_edge, win_red_edge) * 100
         win_units_d = win_blue_units if blue_win_conf > red_win_conf else win_red_units
         win_label_d = win_blue_label if blue_win_conf > red_win_conf else win_red_label
@@ -732,11 +729,11 @@ if predict_btn:
 
         discord_msg = f"""🎮 **{blue_team_name} vs {red_team_name}**{game_str}
 
-🏆 **WINNER: {win_pick}** {win_pct:.1f}% | Edge: +{win_edge_d:.1f}% | Odds: {win_odds_d} | {win_units_d}u {win_label_d}
-⚔️ **FT5: {ft5_pick}** {ft5_pick_conf*100:.1f}% | Edge: +{ft5_edge_d:.1f}% | Odds: {ft5_pick_odds} | {bot_rec_str}u {ft5_pick_label}
+🏆 **WINNER: {win_pick}** {win_pick_conf*100:.1f}% | Edge: +{win_edge_d:.1f}% | Odds: {win_odds_d} | {win_units_d}u {win_label_d}
+⚔️ **FT5: {ft5_pick}** {ft5_pick_conf*100:.1f}% | Edge: +{ft5_edge_d:.1f}% | Odds: {ft5_pick_odds} | {ft5_bot_rec}u {ft5_pick_label}
 📊 Win confidence: {win_conf_level} | FT5 confidence: {ft5_conf_level}{draft_win_str}{draft_ft5_str}"""
 
-        discord_sent = send_discord_dm(discord_msg)
+        discord_sent = send_discord_dm(discord_msg) if send_discord else None
 
         st.divider()
 
@@ -960,17 +957,16 @@ if predict_btn:
                         ft5_blue_odds, ft5_red_odds)
                 st.write(reasoning)
 
-        # Status line
+        # Status
         status_parts = []
-        if discord_sent:
-            status_parts.append("📨 Discord DM sent")
-        else:
-            status_parts.append("⚠️ Discord DM failed")
-        if sheets_ok is True:
-            status_parts.append("📊 Logged to Google Sheets")
-        else:
-            status_parts.append("⚠️ Google Sheets log failed")
-        st.caption(" | ".join(status_parts))
+        if send_discord:
+            status_parts.append("📨 Discord sent" if discord_sent else "⚠️ Discord failed")
+        if send_ft5_sheet:
+            status_parts.append("📊 FT5 logged" if ft5_sheets_ok is True else "⚠️ FT5 sheet failed")
+        if send_win_sheet:
+            status_parts.append("🏆 Winner logged" if winner_sheets_ok is True else "⚠️ Winner sheet failed")
+        if status_parts:
+            st.caption(" | ".join(status_parts))
 
         st.divider()
         st.caption("~64.68% true accuracy | Trust 65%+ | Best ROI at 2.30+ odds")
