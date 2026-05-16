@@ -315,21 +315,20 @@ def send_discord_dm(message):
     except Exception:
         return False
 
-def log_to_sheets(row_data):
+def log_to_sheets(row_data, sheet_id):
     try:
         creds_json = json.loads(st.secrets["GOOGLE_SERVICE_ACCOUNT"])
-        sheet_id   = st.secrets["GOOGLE_SHEETS_ID"]
         from google.oauth2 import service_account
         from googleapiclient.discovery import build
         creds = service_account.Credentials.from_service_account_info(
             creds_json,
             scopes=["https://www.googleapis.com/auth/spreadsheets"]
         )
-        service = build("sheets", "v4", credentials=creds)
-        result  = service.spreadsheets().values().get(
+        service  = build("sheets", "v4", credentials=creds)
+        result   = service.spreadsheets().values().get(
             spreadsheetId=sheet_id, range="Dashboard!A:A").execute()
         values   = result.get("values", [])
-        next_row = max(21, len(values) + 1)
+        next_row = max(9, len(values) + 1)
         service.spreadsheets().values().update(
             spreadsheetId=sheet_id,
             range=f"Dashboard!A{next_row}:J{next_row}",
@@ -337,7 +336,7 @@ def log_to_sheets(row_data):
             body={"values": [row_data]}
         ).execute()
         return True
-    except Exception as e:
+    except Exception:
         return False
 
 def get_claude_reasoning(
@@ -514,11 +513,16 @@ with gc3:
     ft5_red_odds  = st.number_input("Red odds",  min_value=1.01, max_value=10.0,
                                      value=1.95, step=0.05, key="fro")
 
-chk_col1, chk_col2, chk_col3 = st.columns([2, 2, 3])
-with chk_col1:
-    send_discord = st.checkbox("📨 Send to Discord", value=True)
-with chk_col2:
-    send_sheets  = st.checkbox("📊 Log to Sheets", value=True)
+# Checkboxes
+chk1, chk2, chk3, chk4 = st.columns(4)
+with chk1:
+    send_discord    = st.checkbox("📨 Discord",        value=True)
+with chk2:
+    send_ft5_sheet  = st.checkbox("📊 FT5 Sheet",      value=True)
+with chk3:
+    send_win_sheet  = st.checkbox("🏆 Winner Sheet",   value=True)
+with chk4:
+    st.empty()
 
 predict_btn = st.button("🔮 Predict", type="primary", use_container_width=True)
 
@@ -669,39 +673,45 @@ if predict_btn:
         win_caution = 0.60 <= max(blue_win_conf, red_win_conf) < 0.65
         ft5_caution = 0.60 <= max(blue_ft5_conf, red_ft5_conf) < 0.65
 
-        # =============================================================
-        # GOOGLE SHEETS LOGGING — FT5 only
-        # =============================================================
+        # Shared row data fields
+        series_str  = f"{blue_team_name} vs {red_team_name}"
+        league_str  = get_league(blue_team_norm or red_team_norm)
+        map_str     = game_number.strip() if game_number.strip() else ""
+        today_str   = datetime.now().strftime("%m/%d/%Y")
+
+        # FT5 sheet row
         ft5_pick       = blue_team_name if blue_ft5_conf > red_ft5_conf else red_team_name
         ft5_pick_conf  = max(blue_ft5_conf, red_ft5_conf)
         ft5_pick_odds  = ft5_blue_odds if blue_ft5_conf > red_ft5_conf else ft5_red_odds
         ft5_pick_units = ft5_blue_units if blue_ft5_conf > red_ft5_conf else ft5_red_units
         ft5_pick_label = ft5_blue_label if blue_ft5_conf > red_ft5_conf else ft5_red_label
-        series_str     = f"{blue_team_name} vs {red_team_name}"
-        league_str     = get_league(blue_team_norm or red_team_norm)
-        map_str        = game_number.strip() if game_number.strip() else ""
-        bot_rec_str    = str(ft5_pick_units) if ft5_pick_units > 0 else "Skip"
+        ft5_bot_rec    = str(ft5_pick_units) if ft5_pick_units > 0 else "Skip"
 
-        sheets_row = [
-            datetime.now().strftime("%m/%d/%Y"),
-            series_str,
-            map_str,
-            league_str,
-            ft5_pick,
-            "",
-            bot_rec_str,
-            conf_short(ft5_conf_level),
-            round(ft5_pick_conf, 4),
-            ft5_pick_odds,
+        ft5_row = [
+            today_str, series_str, map_str, league_str, ft5_pick,
+            "", ft5_bot_rec, conf_short(ft5_conf_level),
+            round(ft5_pick_conf, 4), ft5_pick_odds,
         ]
 
-        sheets_ok    = log_to_sheets(sheets_row) if send_sheets else None
+        # Winner sheet row
+        win_pick       = blue_team_name if blue_win_conf > red_win_conf else red_team_name
+        win_pick_conf  = max(blue_win_conf, red_win_conf)
+        win_pick_odds  = win_blue_odds if blue_win_conf > red_win_conf else win_red_odds
+        win_pick_units = win_blue_units if blue_win_conf > red_win_conf else win_red_units
+        win_pick_label = win_blue_label if blue_win_conf > red_win_conf else win_red_label
+        win_bot_rec    = str(win_pick_units) if win_pick_units > 0 else "Skip"
 
-        # =============================================================
-        # DISCORD DM
-        # =============================================================
-        win_pick    = blue_team_name if blue_win_conf > red_win_conf else red_team_name
-        win_pct     = max(blue_win_conf, red_win_conf) * 100
+        winner_row = [
+            today_str, series_str, map_str, league_str, win_pick,
+            "", win_bot_rec, conf_short(win_conf_level),
+            round(win_pick_conf, 4), win_pick_odds,
+        ]
+
+        # Log to sheets
+        ft5_sheets_ok    = log_to_sheets(ft5_row,    st.secrets["GOOGLE_SHEETS_ID"])        if send_ft5_sheet else None
+        winner_sheets_ok = log_to_sheets(winner_row, st.secrets["GOOGLE_WINNER_SHEETS_ID"]) if send_win_sheet else None
+
+        # Discord DM
         win_edge_d  = max(win_blue_edge, win_red_edge) * 100
         win_units_d = win_blue_units if blue_win_conf > red_win_conf else win_red_units
         win_label_d = win_blue_label if blue_win_conf > red_win_conf else win_red_label
@@ -719,8 +729,8 @@ if predict_btn:
 
         discord_msg = f"""🎮 **{blue_team_name} vs {red_team_name}**{game_str}
 
-🏆 **WINNER: {win_pick}** {win_pct:.1f}% | Edge: +{win_edge_d:.1f}% | Odds: {win_odds_d} | {win_units_d}u {win_label_d}
-⚔️ **FT5: {ft5_pick}** {ft5_pick_conf*100:.1f}% | Edge: +{ft5_edge_d:.1f}% | Odds: {ft5_pick_odds} | {bot_rec_str}u {ft5_pick_label}
+🏆 **WINNER: {win_pick}** {win_pick_conf*100:.1f}% | Edge: +{win_edge_d:.1f}% | Odds: {win_odds_d} | {win_units_d}u {win_label_d}
+⚔️ **FT5: {ft5_pick}** {ft5_pick_conf*100:.1f}% | Edge: +{ft5_edge_d:.1f}% | Odds: {ft5_pick_odds} | {ft5_bot_rec}u {ft5_pick_label}
 📊 Win confidence: {win_conf_level} | FT5 confidence: {ft5_conf_level}{draft_win_str}{draft_ft5_str}"""
 
         discord_sent = send_discord_dm(discord_msg) if send_discord else None
@@ -950,9 +960,11 @@ if predict_btn:
         # Status
         status_parts = []
         if send_discord:
-            status_parts.append("📨 Discord DM sent" if discord_sent else "⚠️ Discord DM failed")
-        if send_sheets:
-            status_parts.append("📊 Logged to Sheets" if sheets_ok is True else "⚠️ Sheets log failed")
+            status_parts.append("📨 Discord sent" if discord_sent else "⚠️ Discord failed")
+        if send_ft5_sheet:
+            status_parts.append("📊 FT5 logged" if ft5_sheets_ok is True else "⚠️ FT5 sheet failed")
+        if send_win_sheet:
+            status_parts.append("🏆 Winner logged" if winner_sheets_ok is True else "⚠️ Winner sheet failed")
         if status_parts:
             st.caption(" | ".join(status_parts))
 
