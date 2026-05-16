@@ -501,7 +501,7 @@ gc1, gc2, gc3 = st.columns([1, 2, 2])
 with gc1:
     game_number = st.text_input("Game #", key='game_number', placeholder="1, 2, 3...")
 with gc2:
-    st.markdown("**Match Winner**")
+    st.markdown("**Match **")
     win_blue_odds = st.number_input("Blue odds", min_value=1.01, max_value=10.0,
                                      value=1.85, step=0.05, key="wbo")
     win_red_odds  = st.number_input("Red odds",  min_value=1.01, max_value=10.0,
@@ -520,7 +520,7 @@ with chk1:
 with chk2:
     send_ft5_sheet  = st.checkbox("📊 FT5 Sheet",      value=True)
 with chk3:
-    send_win_sheet  = st.checkbox("🏆 Winner Sheet",   value=True)
+    send_win_sheet  = st.checkbox("🏆  Sheet",   value=True)
 with chk4:
     st.empty()
 
@@ -658,8 +658,8 @@ if predict_btn:
         ft5_blue_edge, ft5_blue_units, ft5_blue_label, ft5_blue_impl = calc_edge(blue_ft5_conf, ft5_blue_odds)
         ft5_red_edge,  ft5_red_units,  ft5_red_label,  ft5_red_impl  = calc_edge(red_ft5_conf,  ft5_red_odds)
 
-        win_winner  = blue_team_name if blue_win_conf > red_win_conf else red_team_name
-        ft5_winner  = blue_team_name if blue_ft5_conf > red_ft5_conf else red_team_name
+        win_  = blue_team_name if blue_win_conf > red_win_conf else red_team_name
+        ft5_  = blue_team_name if blue_ft5_conf > red_ft5_conf else red_team_name
         faster_team = blue_team_name if b_speed < r_speed else red_team_name
         est_time    = (b_speed + r_speed) / 2
 
@@ -693,7 +693,7 @@ if predict_btn:
             round(ft5_pick_conf, 4), ft5_pick_odds,
         ]
 
-        # Winner sheet row
+        #  sheet row
         win_pick       = blue_team_name if blue_win_conf > red_win_conf else red_team_name
         win_pick_conf  = max(blue_win_conf, red_win_conf)
         win_pick_odds  = win_blue_odds if blue_win_conf > red_win_conf else win_red_odds
@@ -702,9 +702,9 @@ if predict_btn:
         win_bot_rec    = str(win_pick_units) if win_pick_units > 0 else "Skip"
 
         winner_row = [
-            today_str, series_str, map_str, league_str, win_pick,
-            "", win_bot_rec, conf_short(win_conf_level),
-            round(win_pick_conf, 4), win_pick_odds,
+        today_str, series_str, map_str, league_str, win_pick,
+        "", win_bot_rec, conf_short(win_conf_level),
+        round(win_pick_conf * 100, 2), win_pick_odds,
         ]
 
         # Log to sheets
