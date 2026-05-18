@@ -513,14 +513,13 @@ with gc3:
     ft5_red_odds  = st.number_input("Red odds",  min_value=1.01, max_value=10.0,
                                      value=1.95, step=0.05, key="fro")
 
-# Checkboxes
 chk1, chk2, chk3, chk4 = st.columns(4)
 with chk1:
-    send_discord    = st.checkbox("📨 Discord",        value=True)
+    send_discord   = st.checkbox("📨 Discord",      value=True)
 with chk2:
-    send_ft5_sheet  = st.checkbox("📊 FT5 Sheet",      value=True)
+    send_ft5_sheet = st.checkbox("📊 FT5 Sheet",    value=True)
 with chk3:
-    send_win_sheet  = st.checkbox("🏆 Winner Sheet",   value=True)
+    send_win_sheet = st.checkbox("🏆 Winner Sheet", value=True)
 with chk4:
     st.empty()
 
@@ -673,13 +672,13 @@ if predict_btn:
         win_caution = 0.60 <= max(blue_win_conf, red_win_conf) < 0.65
         ft5_caution = 0.60 <= max(blue_ft5_conf, red_ft5_conf) < 0.65
 
-        # Shared row data fields
+        # Shared fields
         series_str  = f"{blue_team_name} vs {red_team_name}"
         league_str  = get_league(blue_team_norm or red_team_norm)
         map_str     = game_number.strip() if game_number.strip() else ""
         today_str   = datetime.now().strftime("%m/%d/%Y")
 
-        # FT5 sheet row
+        # FT5 sheet row — decimal model % (0.6454), sheet formats as 64.5%
         ft5_pick       = blue_team_name if blue_ft5_conf > red_ft5_conf else red_team_name
         ft5_pick_conf  = max(blue_ft5_conf, red_ft5_conf)
         ft5_pick_odds  = ft5_blue_odds if blue_ft5_conf > red_ft5_conf else ft5_red_odds
@@ -690,10 +689,11 @@ if predict_btn:
         ft5_row = [
             today_str, series_str, map_str, league_str, ft5_pick,
             "", ft5_bot_rec, conf_short(ft5_conf_level),
-            round(ft5_pick_conf, 4), ft5_pick_odds,
+            round(ft5_pick_conf, 4),  # stored as decimal e.g. 0.6454, sheet shows 64.5%
+            ft5_pick_odds,
         ]
 
-        # Winner sheet row
+        # Winner sheet row — decimal model % (0.6454), sheet formats as 64.5%
         win_pick       = blue_team_name if blue_win_conf > red_win_conf else red_team_name
         win_pick_conf  = max(blue_win_conf, red_win_conf)
         win_pick_odds  = win_blue_odds if blue_win_conf > red_win_conf else win_red_odds
@@ -704,10 +704,10 @@ if predict_btn:
         winner_row = [
             today_str, series_str, map_str, league_str, win_pick,
             "", win_bot_rec, conf_short(win_conf_level),
-            round(win_pick_conf, 4), win_pick_odds,
+            round(win_pick_conf, 4),  # stored as decimal e.g. 0.6454, sheet shows 64.5%
+            win_pick_odds,
         ]
 
-        # Log to sheets
         ft5_sheets_ok    = log_to_sheets(ft5_row,    st.secrets["GOOGLE_SHEETS_ID"])        if send_ft5_sheet else None
         winner_sheets_ok = log_to_sheets(winner_row, st.secrets["GOOGLE_WINNER_SHEETS_ID"]) if send_win_sheet else None
 
@@ -741,7 +741,6 @@ if predict_btn:
         if game_label: match_title += f" — {game_label}"
         st.markdown(match_title)
 
-        # Team Stats
         with st.expander("📋 Team Stats", expanded=False):
             sc1, sc2 = st.columns(2)
             with sc1:
@@ -762,7 +761,6 @@ if predict_btn:
             with hc2:
                 st.write(f"Early H2H: {blue_team_name} {b_ft5_h2h}–{r_ft5_h2h} {red_team_name}")
 
-        # Match Winner
         st.markdown("### 🏆 Match Winner")
         winner_color = "🔵" if blue_win_conf > red_win_conf else "🔴"
         st.markdown(f"#### {winner_color} Model pick: **{win_winner}**")
@@ -855,7 +853,6 @@ if predict_btn:
 
         st.divider()
 
-        # First to Five
         st.markdown("### ⚔️ First to Five Kills")
         ft5_color = "🔵" if blue_ft5_conf > red_ft5_conf else "🔴"
         st.markdown(f"#### {ft5_color} Model pick: **{ft5_winner}**")
@@ -957,7 +954,6 @@ if predict_btn:
                         ft5_blue_odds, ft5_red_odds)
                 st.write(reasoning)
 
-        # Status
         status_parts = []
         if send_discord:
             status_parts.append("📨 Discord sent" if discord_sent else "⚠️ Discord failed")
