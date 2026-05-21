@@ -18,7 +18,9 @@ st.set_page_config(
 st.title("🎮 LoL Pro Match Predictor")
 st.caption("Win + First to Five | ~64.68% true accuracy | Calibrated probabilities")
 
-FORM_WINDOW       = 5
+FORM_WINDOW       = 8
+RECENT_WINDOW     = 20
+RECENT_WEIGHT     = 0.2
 BLUE_SIDE_WINRATE = 0.5312
 DISCORD_USER_ID   = "465715665584652315"
 
@@ -225,7 +227,15 @@ def get_h2h_total(h2h_dict, blue, red):
 
 def get_form(recent_dict, team):
     recent = recent_dict.get(team, [0.5])
-    return sum(recent[-FORM_WINDOW:]) / len(recent[-FORM_WINDOW:])
+    h = recent[-FORM_WINDOW:]
+    if not h: return 0.5
+    weights = list(range(1, len(h) + 1))
+    return sum(v * w for v, w in zip(h, weights)) / sum(weights)
+
+def get_recent_wr(recent_dict, team):
+    recent = recent_dict.get(team, [])
+    h = recent[-RECENT_WINDOW:]
+    return sum(h) / len(h) if h else 0.5
 
 def odds_label(odds):
     if odds < 1.60:    return "⚠️ Low odds"
@@ -270,13 +280,16 @@ def get_draft_only_prediction(blue, red, b_champ_wr, r_champ_wr, b_pc_avg, r_pc_
     neutral_row = pd.DataFrame([[
         0.5, 0.5, 0.0, 50, 50,
         b_champ_wr, r_champ_wr, b_champ_wr - r_champ_wr,
-        0.5, 0.5, 0.5, 0.0, BLUE_SIDE_WINRATE,
+        0.5, 0.5, 0.5, 0.0,
+        0.5, 0.5, 0.0,
+        BLUE_SIDE_WINRATE,
         b_pc_avg, r_pc_avg, b_pc_avg - r_pc_avg,
     ]], columns=[
         'blue_team_winrate','red_team_winrate','team_winrate_diff',
         'blue_team_games','red_team_games',
         'blue_avg_winrate','red_avg_winrate','winrate_diff',
         'h2h_winrate','blue_form','red_form','form_diff',
+        'blue_recent_wr','red_recent_wr','recent_wr_diff',
         'blue_side_advantage','blue_pc_avg','red_pc_avg','pc_avg_diff',
     ])
     win_prob = win_model.predict_proba(pd.concat([b_win_enc, r_win_enc, neutral_row], axis=1))[0]
@@ -297,7 +310,12 @@ def get_draft_only_prediction(blue, red, b_champ_wr, r_champ_wr, b_pc_avg, r_pc_
         'h2h_early_rate','blue_early_form','red_early_form','early_form_diff',
     ])
     ft5_prob = ft5_model.predict_proba(pd.concat([b_ft5_enc, r_ft5_enc, neutral_ft5], axis=1))[0]
-    return win_prob[1], win_prob[0], ft5_prob[1], ft5_prob[0]
+    # Clip to 5%-95%
+    bw = min(max(win_prob[1], 0.05), 0.95)
+    rw = min(max(win_prob[0], 0.05), 0.95)
+    bf = min(max(ft5_prob[1], 0.05), 0.95)
+    rf = min(max(ft5_prob[0], 0.05), 0.95)
+    return bw, rw, bf, rf
 
 def send_discord_dm(message):
     try:
@@ -338,6 +356,98 @@ def log_to_sheets(row_data, sheet_id):
         return True
     except Exception:
         return False
+
+def fetch_tracker_history(conf, conf_level, sheet_id):
+    """Pull completed rows from a tracker sheet and return W-L for matching band+confidence."""
+    try:
+        creds_json = json.loads(st.secrets["GOOGLE_SERVICE_ACCOUNT"])
+        from google.oauth2 import service_account
+        from googleapiclient.discovery import build
+        creds = service_account.Credentials.from_service_account_info(
+            creds_json, scopes=["https://www.googleapis.com/auth/spreadsheets"])
+        service = build("sheets", "v4", credentials=creds)
+        result  = service.spreadsheets().values().get(
+            spreadsheetId=sheet_id, range="Dashboard!H9:K1000").execute()
+        rows = result.get("values", [])
+
+        # Columns: H=Bot Confidence, I=Model%, J=Odds, K=Result
+        # Band is ±2.5% around the prediction (5% window)
+        lo = conf - 0.025
+        hi = conf + 0.025
+        conf_short_map = {"High": "High", "Med": "Med", "Low": "Low"}
+        target_conf = conf_short(conf_level)
+
+        band_conf_w, band_conf_l = 0, 0  # same band + same confidence
+        band_w,      band_l      = 0, 0  # same band only
+        conf_w,      conf_l      = 0, 0  # same confidence only
+
+        for r in rows:
+            if len(r) < 4: continue
+            raw_conf  = r[0].strip() if r[0] else ""
+            raw_pct   = r[1].strip() if len(r) > 1 else ""
+            result    = r[3].strip() if len(r) > 3 else ""
+            if result not in ("Win", "Loss"): continue
+            try:
+                pct = float(raw_pct)
+                if pct > 1: pct = pct / 100
+            except:
+                continue
+            in_band = lo <= pct <= hi
+            in_conf = raw_conf == target_conf
+            won = result == "Win"
+            if in_band and in_conf:
+                if won: band_conf_w += 1
+                else:   band_conf_l += 1
+            if in_band:
+                if won: band_w += 1
+                else:   band_l += 1
+            if in_conf:
+                if won: conf_w += 1
+                else:   conf_l += 1
+
+        return {
+            "band_conf": (band_conf_w, band_conf_l),
+            "band":      (band_w, band_l),
+            "conf":      (conf_w, conf_l),
+            "target_conf": target_conf,
+            "band_label": f"{lo*100:.0f}%-{hi*100:.0f}%",
+        }
+    except Exception:
+        return None
+
+def format_history(data, label):
+    """Format tracker history into a readable string."""
+    if not data:
+        return "📊 No tracker data available"
+
+    parts = []
+
+    bc_w, bc_l = data["band_conf"]
+    bc_total = bc_w + bc_l
+    if bc_total >= 3:
+        bc_pct = bc_w / bc_total * 100
+        emoji  = "🟢" if bc_pct >= 65 else ("🟡" if bc_pct >= 50 else "🔴")
+        parts.append(f"{emoji} **{data['band_label']} + {data['target_conf']} conf:** {bc_w}W-{bc_l}L ({bc_pct:.0f}%) — {bc_total} games")
+    elif bc_total > 0:
+        parts.append(f"⚪ **{data['band_label']} + {data['target_conf']} conf:** {bc_w}W-{bc_l}L — only {bc_total} game{'s' if bc_total > 1 else ''}, too small")
+    else:
+        parts.append(f"⚪ **{data['band_label']} + {data['target_conf']} conf:** No completed games yet")
+
+    b_w, b_l = data["band"]
+    b_total = b_w + b_l
+    if b_total >= 5 and b_total != bc_total:
+        b_pct  = b_w / b_total * 100
+        emoji  = "🟢" if b_pct >= 65 else ("🟡" if b_pct >= 50 else "🔴")
+        parts.append(f"{emoji} **{data['band_label']} (all confidence):** {b_w}W-{b_l}L ({b_pct:.0f}%) — {b_total} games")
+
+    c_w, c_l = data["conf"]
+    c_total = c_w + c_l
+    if c_total >= 5:
+        c_pct  = c_w / c_total * 100
+        emoji  = "🟢" if c_pct >= 65 else ("🟡" if c_pct >= 50 else "🔴")
+        parts.append(f"{emoji} **{data['target_conf']} confidence (all %):** {c_w}W-{c_l}L ({c_pct:.0f}%) — {c_total} games")
+
+    return "\n".join(parts) if parts else "📊 Not enough data yet"
 
 def get_claude_reasoning(
         blue_team, red_team, blue_picks, red_picks,
@@ -587,21 +697,27 @@ if predict_btn:
         b_pc_avg = get_blended_avg(blue_players, blue) if blue else 0.5
         r_pc_avg = get_blended_avg(red_players,  red)  if red  else 0.5
 
+        b_recent_wr = get_recent_wr(win_team_recent, blue_team_norm) if blue_team_norm else 0.5
+        r_recent_wr = get_recent_wr(win_team_recent, red_team_norm)  if red_team_norm  else 0.5
+
         win_extra = pd.DataFrame([[
             b_wr, r_wr, b_wr-r_wr, b_games, r_games,
             b_champ_wr, r_champ_wr, b_champ_wr-r_champ_wr,
             win_h2h_r, b_form, r_form, b_form-r_form,
+            b_recent_wr, r_recent_wr, b_recent_wr-r_recent_wr,
             BLUE_SIDE_WINRATE, b_pc_avg, r_pc_avg, b_pc_avg-r_pc_avg,
         ]], columns=[
             'blue_team_winrate','red_team_winrate','team_winrate_diff',
             'blue_team_games','red_team_games',
             'blue_avg_winrate','red_avg_winrate','winrate_diff',
             'h2h_winrate','blue_form','red_form','form_diff',
+            'blue_recent_wr','red_recent_wr','recent_wr_diff',
             'blue_side_advantage','blue_pc_avg','red_pc_avg','pc_avg_diff',
         ])
-        win_prob      = win_model.predict_proba(pd.concat([b_win_enc,r_win_enc,win_extra],axis=1))[0]
-        blue_win_conf = win_prob[1]
-        red_win_conf  = win_prob[0]
+        win_prob_raw  = win_model.predict_proba(pd.concat([b_win_enc,r_win_enc,win_extra],axis=1))[0]
+        # Clip to 5%-95% — prevents 100% confidence outputs
+        blue_win_conf = min(max(win_prob_raw[1], 0.05), 0.95)
+        red_win_conf  = min(max(win_prob_raw[0], 0.05), 0.95)
 
         if len(blue) == 5:
             b_ft5_enc = pd.DataFrame(ft5_mlb.transform([blue]),
@@ -642,9 +758,10 @@ if predict_btn:
             'blue_kill_speed','red_kill_speed','speed_diff',
             'h2h_early_rate','blue_early_form','red_early_form','early_form_diff',
         ])
-        ft5_prob      = ft5_model.predict_proba(pd.concat([b_ft5_enc,r_ft5_enc,ft5_extra],axis=1))[0]
-        blue_ft5_conf = ft5_prob[1]
-        red_ft5_conf  = ft5_prob[0]
+        ft5_prob_raw  = ft5_model.predict_proba(pd.concat([b_ft5_enc,r_ft5_enc,ft5_extra],axis=1))[0]
+        # Clip to 5%-95%
+        blue_ft5_conf = min(max(ft5_prob_raw[1], 0.05), 0.95)
+        red_ft5_conf  = min(max(ft5_prob_raw[0], 0.05), 0.95)
 
         if len(blue)==5 and len(red)==5:
             bdw, rdw, bdf, rdf = get_draft_only_prediction(
@@ -678,7 +795,7 @@ if predict_btn:
         map_str     = game_number.strip() if game_number.strip() else ""
         today_str   = datetime.now().strftime("%m/%d/%Y")
 
-        # FT5 sheet row — decimal model % (0.6454), sheet formats as 64.5%
+        # FT5 sheet row
         ft5_pick       = blue_team_name if blue_ft5_conf > red_ft5_conf else red_team_name
         ft5_pick_conf  = max(blue_ft5_conf, red_ft5_conf)
         ft5_pick_odds  = ft5_blue_odds if blue_ft5_conf > red_ft5_conf else ft5_red_odds
@@ -689,11 +806,10 @@ if predict_btn:
         ft5_row = [
             today_str, series_str, map_str, league_str, ft5_pick,
             "", ft5_bot_rec, conf_short(ft5_conf_level),
-            round(ft5_pick_conf, 4),  # stored as decimal e.g. 0.6454, sheet shows 64.5%
-            ft5_pick_odds,
+            round(ft5_pick_conf, 4), ft5_pick_odds,
         ]
 
-        # Winner sheet row — decimal model % (0.6454), sheet formats as 64.5%
+        # Winner sheet row
         win_pick       = blue_team_name if blue_win_conf > red_win_conf else red_team_name
         win_pick_conf  = max(blue_win_conf, red_win_conf)
         win_pick_odds  = win_blue_odds if blue_win_conf > red_win_conf else win_red_odds
@@ -704,14 +820,13 @@ if predict_btn:
         winner_row = [
             today_str, series_str, map_str, league_str, win_pick,
             "", win_bot_rec, conf_short(win_conf_level),
-            round(win_pick_conf, 4),  # stored as decimal e.g. 0.6454, sheet shows 64.5%
-            win_pick_odds,
+            round(win_pick_conf, 4), win_pick_odds,
         ]
 
         ft5_sheets_ok    = log_to_sheets(ft5_row,    st.secrets["GOOGLE_SHEETS_ID"])        if send_ft5_sheet else None
         winner_sheets_ok = log_to_sheets(winner_row, st.secrets["GOOGLE_WINNER_SHEETS_ID"]) if send_win_sheet else None
 
-        # Discord DM
+        # Discord
         win_edge_d  = max(win_blue_edge, win_red_edge) * 100
         win_units_d = win_blue_units if blue_win_conf > red_win_conf else win_red_units
         win_label_d = win_blue_label if blue_win_conf > red_win_conf else win_red_label
@@ -786,6 +901,15 @@ if predict_btn:
             st.caption(f"⚖️ Draft-only: 🔵 {bdw*100:.1f}% vs 🔴 {rdw*100:.1f}% — {dw} {dn} has better draft")
 
         st.markdown(f"**📊 Confidence: {win_conf_level}** — {win_conf_desc}")
+
+        with st.spinner("Fetching your tracker history..."):
+            win_history = fetch_tracker_history(
+                win_pick_conf, win_conf_level,
+                st.secrets["GOOGLE_WINNER_SHEETS_ID"])
+        if win_history:
+            with st.expander("📈 Your Tracker History (Winner)", expanded=True):
+                st.markdown(format_history(win_history, "Winner"))
+
         for r in win_reasons: st.write(f"✔ {r}")
         for w in win_warnings:
             if "Mixed signals" in w:
@@ -879,6 +1003,15 @@ if predict_btn:
             st.caption(f"⚖️ Draft-only: 🔵 {bdf*100:.1f}% vs 🔴 {rdf*100:.1f}% — {df5} {dn5} more aggressive draft")
 
         st.markdown(f"**📊 Confidence: {ft5_conf_level}** — {ft5_conf_desc}")
+
+        with st.spinner("Fetching your FT5 tracker history..."):
+            ft5_history = fetch_tracker_history(
+                ft5_pick_conf, ft5_conf_level,
+                st.secrets["GOOGLE_SHEETS_ID"])
+        if ft5_history:
+            with st.expander("📈 Your Tracker History (FT5)", expanded=True):
+                st.markdown(format_history(ft5_history, "FT5"))
+
         for r in ft5_reasons: st.write(f"✔ {r}")
         for w in ft5_warnings:
             if "Mixed signals" in w:
