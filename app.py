@@ -16,7 +16,7 @@ st.set_page_config(
 )
 
 st.title("🎮 LoL Pro Match Predictor")
-st.caption("Win + First to Five | ~64.68% true accuracy | Calibrated probabilities")
+st.caption("V8 | Win + First to Five | ~67.50% win accuracy / AUC 0.7172 | Gold trajectory features")
 
 FORM_WINDOW       = 8
 RECENT_WINDOW     = 20
@@ -1186,4 +1186,4 @@ if predict_btn:
             st.caption(" | ".join(status_parts))
 
         st.divider()
-        st.caption("~64.68% true accuracy | Trust 65%+ | Best ROI at 2.30+ odds")
+        st.caption("V8 | Win 67.50% / AUC 0.7172 | FT5 58.56% | Best ROI at 2.30+ odds (81.6%)")
