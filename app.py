@@ -16,9 +16,11 @@ st.set_page_config(
 )
 
 st.title("🎮 LoL Pro Match Predictor")
-st.caption("Win + First to Five | ~64.68% true accuracy | Calibrated probabilities")
+st.caption("V8 | Win + First to Five | ~67.50% win accuracy / AUC 0.7172 | Gold trajectory features")
 
-FORM_WINDOW       = 5
+FORM_WINDOW       = 8
+RECENT_WINDOW     = 20
+RECENT_WEIGHT     = 0.2
 BLUE_SIDE_WINRATE = 0.5312
 DISCORD_USER_ID   = "465715665584652315"
 
@@ -142,6 +144,8 @@ all_champs       = p['all_champs']
 PC_WEIGHT        = p.get('pc_weight', 0.10)
 RC_WEIGHT        = p.get('rc_weight', 0.90)
 H2H_CAP          = p.get('h2h_cap',  0.60)
+gold_lookup      = p.get('gold_lookup', {})
+GOLD_WINDOW      = p.get('gold_window', 15)
 
 POSITIONS  = ['top', 'jng', 'mid', 'adc', 'sup']
 POS_LABELS = ['Top', 'Jng', 'Mid', 'ADC', 'Sup']
@@ -225,7 +229,32 @@ def get_h2h_total(h2h_dict, blue, red):
 
 def get_form(recent_dict, team):
     recent = recent_dict.get(team, [0.5])
-    return sum(recent[-FORM_WINDOW:]) / len(recent[-FORM_WINDOW:])
+    h = recent[-FORM_WINDOW:]
+    if not h: return 0.5
+    weights = list(range(1, len(h) + 1))
+    return sum(v * w for v, w in zip(h, weights)) / sum(weights)
+
+def get_recent_wr(recent_dict, team):
+    recent = recent_dict.get(team, [])
+    h = recent[-RECENT_WINDOW:]
+    return sum(h) / len(h) if h else 0.5
+
+def get_gold_features(team_name, match_date=None):
+    """Get avg_gd20 and late_scaling from gold_lookup using today's date as fallback."""
+    if not team_name: return 0.0, 0.0
+    # Try today first, then scan recent entries for this team
+    from datetime import datetime, timedelta
+    if match_date is None:
+        match_date = datetime.now().strftime('%Y-%m-%d')
+    # Try exact date, then walk back up to 30 days
+    dt = datetime.strptime(match_date, '%Y-%m-%d')
+    for i in range(30):
+        ds = (dt - timedelta(days=i)).strftime('%Y-%m-%d')
+        key = (ds, team_name)
+        if key in gold_lookup:
+            entry = gold_lookup[key]
+            return entry.get('avg_gd20', 0.0), entry.get('late_scaling', 0.0)
+    return 0.0, 0.0
 
 def odds_label(odds):
     if odds < 1.60:    return "⚠️ Low odds"
@@ -270,14 +299,21 @@ def get_draft_only_prediction(blue, red, b_champ_wr, r_champ_wr, b_pc_avg, r_pc_
     neutral_row = pd.DataFrame([[
         0.5, 0.5, 0.0, 50, 50,
         b_champ_wr, r_champ_wr, b_champ_wr - r_champ_wr,
-        0.5, 0.5, 0.5, 0.0, BLUE_SIDE_WINRATE,
+        0.5, 0.5, 0.5, 0.0,
+        0.5, 0.5, 0.0,
+        BLUE_SIDE_WINRATE,
         b_pc_avg, r_pc_avg, b_pc_avg - r_pc_avg,
+        0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0,
     ]], columns=[
         'blue_team_winrate','red_team_winrate','team_winrate_diff',
         'blue_team_games','red_team_games',
         'blue_avg_winrate','red_avg_winrate','winrate_diff',
         'h2h_winrate','blue_form','red_form','form_diff',
+        'blue_recent_wr','red_recent_wr','recent_wr_diff',
         'blue_side_advantage','blue_pc_avg','red_pc_avg','pc_avg_diff',
+        'blue_avg_gd20','red_avg_gd20','gd20_diff',
+        'blue_late_scaling','red_late_scaling','late_scaling_diff',
     ])
     win_prob = win_model.predict_proba(pd.concat([b_win_enc, r_win_enc, neutral_row], axis=1))[0]
     b_ft5_enc = pd.DataFrame(ft5_mlb.transform([blue]),
@@ -447,39 +483,79 @@ def get_claude_reasoning(
         b_agg, r_agg, b_early, r_early, b_speed, r_speed,
         win_blue_odds, win_red_odds, ft5_blue_odds, ft5_red_odds):
 
-    blue_roster = ', '.join([
-        f"{blue_players[i] if i < len(blue_players) and blue_players[i].strip() else 'Unknown'}"
-        f" ({POS_LABELS[i]}: {blue_picks[i]}, "
-        f"champ wr {win_champ_rate.get(blue_picks[i], 0.5)*100:.0f}%, "
-        f"agg {champ_aggression.get(blue_picks[i], 0.5)*100:.0f}%)"
-        for i in range(len(blue_picks))
-    ])
-    red_roster = ', '.join([
-        f"{red_players[i] if i < len(red_players) and red_players[i].strip() else 'Unknown'}"
-        f" ({POS_LABELS[i]}: {red_picks[i]}, "
-        f"champ wr {win_champ_rate.get(red_picks[i], 0.5)*100:.0f}%, "
-        f"agg {champ_aggression.get(red_picks[i], 0.5)*100:.0f}%)"
-        for i in range(len(red_picks))
-    ])
-    prompt = f"""You are an expert League of Legends analyst. Analyze this pro match and explain the predictions in 3-4 sentences each.
+    # Build roster descriptions focused on champion roles/synergies
+    def describe_roster(players, picks, team):
+        lines = []
+        for i in range(len(picks)):
+            player = players[i].strip() if i < len(players) and players[i].strip() else "Unknown"
+            champ  = picks[i]
+            pos    = POS_LABELS[i] if i < len(POS_LABELS) else ''
+            lines.append(f"{pos}: {player} on {champ}")
+        return ', '.join(lines)
+
+    blue_roster = describe_roster(blue_players, blue_picks, blue_team)
+    red_roster  = describe_roster(red_players,  red_picks,  red_team)
+
+    # Determine comp styles based on archetypes
+    def comp_style(picks):
+        dive = sum(1 for c in picks if champ_aggression.get(c, 0.5) >= 0.58)
+        poke = sum(1 for c in picks if champ_aggression.get(c, 0.5) <= 0.45)
+        if dive >= 3: return "dive/engage heavy"
+        if poke >= 3: return "poke/siege oriented"
+        if dive >= 2 and poke == 0: return "dive with peel"
+        return "teamfight/balanced"
+
+    b_style = comp_style(blue_picks)
+    r_style = comp_style(red_picks)
+
+    # Gold trajectory context
+    b_gd20, b_late = get_gold_features(blue_team)
+    r_gd20, r_late = get_gold_features(red_team)
+
+    def gold_context(team, gd20, late):
+        if gd20 > 500:
+            trend = "typically ahead at 20 min"
+        elif gd20 < -500:
+            trend = "typically behind at 20 min"
+        else:
+            trend = "even gold at 20 min"
+        if late > 300:
+            scaling = "and scales well into late game"
+        elif late < -300:
+            scaling = "but tends to fall off late"
+        else:
+            scaling = "with neutral late game scaling"
+        return f"{trend} {scaling}"
+
+    b_gold_ctx = gold_context(blue_team, b_gd20, b_late) if b_gd20 != 0 else "no gold trend data"
+    r_gold_ctx = gold_context(red_team,  r_gd20, r_late) if r_gd20 != 0 else "no gold trend data"
+
+    winner = blue_team if blue_win_conf > red_win_conf else red_team
+    ft5_winner = blue_team if blue_ft5_conf > red_ft5_conf else red_team
+    loser  = red_team  if blue_win_conf > red_win_conf else blue_team
+
+    prompt = f"""You are an expert League of Legends pro play analyst. Analyze how this match should play out based on the draft and team styles. Focus on the game narrative — how teamfights will develop, which phase of the game each team wins, and what win conditions each team has. Do NOT mention win rates, H2H records, or champion mastery stats.
 
 MATCH: {blue_team} (Blue) vs {red_team} (Red)
-BLUE - {blue_team}: {blue_roster}
-Win rate: {b_wr*100:.1f}% | Form: {b_form*100:.0f}% | H2H: {b_win_h2h}-{r_win_h2h}
-Champ quality: {b_champ_wr*100:.1f}% | Player-champ: {b_pc_avg*100:.1f}%
-Early rate: {b_early*100:.1f}% | Kill speed: {b_speed:.1f}m | Aggression: {b_agg*100:.1f}%
 
-RED - {red_team}: {red_roster}
-Win rate: {r_wr*100:.1f}% | Form: {r_form*100:.0f}% | H2H: {r_win_h2h}-{b_win_h2h}
-Champ quality: {r_champ_wr*100:.1f}% | Player-champ: {r_pc_avg*100:.1f}%
-Early rate: {r_early*100:.1f}% | Kill speed: {r_speed:.1f}m | Aggression: {r_agg*100:.1f}%
+BLUE SIDE — {blue_team}
+Draft: {blue_roster}
+Comp style: {b_style}
+Gold trend: {b_gold_ctx}
+Early aggression: {'high' if b_agg > 0.55 else 'low' if b_agg < 0.48 else 'average'} | Avg first kill: {b_speed:.1f} min
 
-MODEL: Winner {blue_team} {blue_win_conf*100:.1f}% vs {red_team} {red_win_conf*100:.1f}%
-FT5: {blue_team} {blue_ft5_conf*100:.1f}% vs {red_team} {red_ft5_conf*100:.1f}%
+RED SIDE — {red_team}
+Draft: {red_roster}
+Comp style: {r_style}
+Gold trend: {r_gold_ctx}
+Early aggression: {'high' if r_agg > 0.55 else 'low' if r_agg < 0.48 else 'average'} | Avg first kill: {r_speed:.1f} min
 
-1. MATCH WINNER REASONING (3-4 sentences): Why does the model favour {blue_team if blue_win_conf > red_win_conf else red_team}?
-2. FIRST TO 5 KILLS REASONING (3-4 sentences): Which team has the more aggressive early composition and why?
-Be specific about champion picks, player strengths, and game style. Keep it concise."""
+MODEL PREDICTION: {winner} wins ({max(blue_win_conf, red_win_conf)*100:.0f}%) | FT5: {ft5_winner} ({max(blue_ft5_conf, red_ft5_conf)*100:.0f}%)
+
+Write two paragraphs:
+1. MATCH FLOW (3-4 sentences): How should this game play out? Describe the draft interaction — does one comp counter the other, which phase of the game does each team win, what are the key win conditions? Explain why {winner} is favoured.
+2. FIRST TO 5 KILLS (2-3 sentences): Which team gets first blood and early kills, and why? Describe the early game matchups and which comp forces early fights.
+Be direct and specific. No bullet points. No statistics."""
 
     try:
         response = requests.post(
@@ -684,17 +760,30 @@ if predict_btn:
         b_pc_avg = get_blended_avg(blue_players, blue) if blue else 0.5
         r_pc_avg = get_blended_avg(red_players,  red)  if red  else 0.5
 
+        b_recent_wr = get_recent_wr(win_team_recent, blue_team_norm) if blue_team_norm else 0.5
+        r_recent_wr = get_recent_wr(win_team_recent, red_team_norm)  if red_team_norm  else 0.5
+
+        # Gold trajectory features
+        b_gd20, b_late = get_gold_features(blue_team_norm) if blue_team_norm else (0.0, 0.0)
+        r_gd20, r_late = get_gold_features(red_team_norm)  if red_team_norm  else (0.0, 0.0)
+
         win_extra = pd.DataFrame([[
             b_wr, r_wr, b_wr-r_wr, b_games, r_games,
             b_champ_wr, r_champ_wr, b_champ_wr-r_champ_wr,
             win_h2h_r, b_form, r_form, b_form-r_form,
+            b_recent_wr, r_recent_wr, b_recent_wr-r_recent_wr,
             BLUE_SIDE_WINRATE, b_pc_avg, r_pc_avg, b_pc_avg-r_pc_avg,
+            b_gd20, r_gd20, b_gd20-r_gd20,
+            b_late, r_late, b_late-r_late,
         ]], columns=[
             'blue_team_winrate','red_team_winrate','team_winrate_diff',
             'blue_team_games','red_team_games',
             'blue_avg_winrate','red_avg_winrate','winrate_diff',
             'h2h_winrate','blue_form','red_form','form_diff',
+            'blue_recent_wr','red_recent_wr','recent_wr_diff',
             'blue_side_advantage','blue_pc_avg','red_pc_avg','pc_avg_diff',
+            'blue_avg_gd20','red_avg_gd20','gd20_diff',
+            'blue_late_scaling','red_late_scaling','late_scaling_diff',
         ])
         win_prob_raw  = win_model.predict_proba(pd.concat([b_win_enc,r_win_enc,win_extra],axis=1))[0]
         # Clip to 5%-95% — prevents 100% confidence outputs
@@ -755,6 +844,11 @@ if predict_btn:
         win_red_edge,  win_red_units,  win_red_label,  win_red_impl  = calc_edge(red_win_conf,  win_red_odds)
         ft5_blue_edge, ft5_blue_units, ft5_blue_label, ft5_blue_impl = calc_edge(blue_ft5_conf, ft5_blue_odds)
         ft5_red_edge,  ft5_red_units,  ft5_red_label,  ft5_red_impl  = calc_edge(red_ft5_conf,  ft5_red_odds)
+
+        # Strong red signal detection
+        # Backtest: blue conf < 48% → red picks are 66% accurate, 14.9% ROI WITHOUT boost
+        # Unit boost was tested and HURTS ROI (10.2% vs 14.9%) — let calc_edge decide
+        ft5_strong_red = blue_ft5_conf < 0.48
 
         win_winner  = blue_team_name if blue_win_conf > red_win_conf else red_team_name
         ft5_winner  = blue_team_name if blue_ft5_conf > red_ft5_conf else red_team_name
@@ -824,11 +918,15 @@ if predict_btn:
             draft_win_str = f"\n⚖️ Draft Win: 🔵 {bdw*100:.1f}% vs 🔴 {rdw*100:.1f}% — {dw_pick}"
             draft_ft5_str = f"\n⚖️ Draft FT5: 🔵 {bdf*100:.1f}% vs 🔴 {rdf*100:.1f}% — {df_pick}"
 
+        red_signal_str = ""
+        if ft5_strong_red:
+            red_signal_str = "\n🚨 STRONG RED SIGNAL — blue conf below 48% (66% historical red accuracy, 14.9% ROI)"
+
         discord_msg = f"""🎮 **{blue_team_name} vs {red_team_name}**{game_str}
 
 🏆 **WINNER: {win_pick}** {win_pick_conf*100:.1f}% | Edge: +{win_edge_d:.1f}% | Odds: {win_odds_d} | {win_units_d}u {win_label_d}
 ⚔️ **FT5: {ft5_pick}** {ft5_pick_conf*100:.1f}% | Edge: +{ft5_edge_d:.1f}% | Odds: {ft5_pick_odds} | {ft5_bot_rec}u {ft5_pick_label}
-📊 Win confidence: {win_conf_level} | FT5 confidence: {ft5_conf_level}{draft_win_str}{draft_ft5_str}"""
+📊 Win confidence: {win_conf_level} | FT5 confidence: {ft5_conf_level}{draft_win_str}{draft_ft5_str}{red_signal_str}"""
 
         discord_sent = send_discord_dm(discord_msg) if send_discord else None
 
@@ -962,6 +1060,14 @@ if predict_btn:
         st.markdown("### ⚔️ First to Five Kills")
         ft5_color = "🔵" if blue_ft5_conf > red_ft5_conf else "🔴"
         st.markdown(f"#### {ft5_color} Model pick: **{ft5_winner}**")
+
+        # Strong red signal — informational only, no unit boost
+        # Backtest: 66% red accuracy, 14.9% ROI when edge exists (normal calc_edge handles units)
+        if ft5_strong_red:
+            st.error(f"🚨 **STRONG RED SIGNAL** — Model blue confidence {blue_ft5_conf*100:.1f}% "
+                     f"(below 48%). Backtest shows red picks in this range are **66% accurate** "
+                     f"with **14.9% ROI**. Trust the unit recommendation below.")
+
         st.caption(f"⏱️ Est. ~{est_time:.1f} min ({faster_team} historically faster)")
         fc1, fc2 = st.columns(2)
         with fc1:
@@ -1080,4 +1186,4 @@ if predict_btn:
             st.caption(" | ".join(status_parts))
 
         st.divider()
-        st.caption("~64.68% true accuracy | Trust 65%+ | Best ROI at 2.30+ odds")
+        st.caption("V8 | Win 67.50% / AUC 0.7172 | FT5 58.56% | Best ROI at 2.30+ odds (81.6%)")
