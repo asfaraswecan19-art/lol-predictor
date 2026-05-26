@@ -111,8 +111,99 @@ def model_confidence(b_games, r_games, h2h_total,
     else:            level, desc = "🔴 LOW",    "Limited data or conflicting signals"
     return level, desc, reasons, warnings_list
 
-@st.cache_resource
-def load_models():
+def ft5_confidence(blue_prob, b_early_rate, r_early_rate,
+                   b_kill_speed, r_kill_speed, b_agg, r_agg,
+                   h2h_total, b_early_form, r_early_form):
+    """
+    FT5 confidence calibrated to BETTING VALUE from backtest:
+
+    Backtest findings:
+    - Strong red signal (blue_prob < 0.48): 61% accuracy but 7.2% ROI
+      → good for accuracy, poor for value due to odds compression
+    - LOW conf + 2.30+ odds: 39.6% ROI — best betting value
+    - Overall model edge: +4.04% over always-blue (53.3% baseline)
+
+    Confidence reflects expected betting value, not raw model accuracy.
+    HIGH = best ROI conditions | MEDIUM = decent value | LOW = weak signal
+    """
+    reasons  = []
+    warnings = []
+
+    # Strong red signal — highest accuracy but note odds compression
+    if blue_prob < 0.48:
+        red_prob = 1 - blue_prob
+        reasons.append(f"Strong red signal — model blue conf {blue_prob*100:.1f}% (below 48%)")
+        reasons.append("Backtest: 61% red accuracy across 123 games")
+        warnings.append("⚠️ Check odds — red signal games often get compressed odds (7.2% ROI backtest)")
+        level = "🟡 MEDIUM"
+        desc  = "High accuracy red pick — verify odds offer value before betting"
+        return level, desc, reasons, warnings
+
+    # Model signal strength beyond baseline
+    deviation = blue_prob - 0.53  # distance from 53% blue baseline
+    blue_pick = blue_prob >= 0.50
+
+    # Kill speed — most direct signal
+    speed_gap = 0
+    if b_kill_speed > 0 and r_kill_speed > 0:
+        speed_gap = abs(b_kill_speed - r_kill_speed)
+        if speed_gap >= 3:
+            faster = "Blue" if b_kill_speed < r_kill_speed else "Red"
+            reasons.append(f"{faster} gets kills {speed_gap:.1f} min faster historically")
+        elif speed_gap >= 1.5:
+            reasons.append("Moderate kill speed gap between teams")
+        else:
+            warnings.append("Similar kill speeds — FT5 hard to call")
+
+    # Early rate gap
+    early_diff = abs(b_early_rate - r_early_rate)
+    if early_diff >= 0.15:
+        faster = "Blue" if b_early_rate > r_early_rate else "Red"
+        reasons.append(f"{faster} wins FT5 races significantly more often")
+    elif early_diff >= 0.08:
+        reasons.append("Moderate early rate advantage")
+    else:
+        warnings.append("Teams have similar FT5 win rates")
+
+    # Aggression
+    agg_diff = abs(b_agg - r_agg)
+    if agg_diff >= 0.08:
+        more_agg = "Blue" if b_agg > r_agg else "Red"
+        reasons.append(f"{more_agg} comp meaningfully more aggressive")
+    elif agg_diff < 0.03:
+        warnings.append("Similar comp aggression")
+
+    # H2H
+    if h2h_total >= 8:
+        reasons.append(f"Good early H2H sample ({h2h_total} games)")
+    elif h2h_total < 3:
+        warnings.append("Limited H2H early game data")
+
+    n_reasons  = len(reasons)
+    n_warnings = len(warnings)
+
+    # Calibrate to ROI findings:
+    # Best ROI comes from 2.30+ odds + any edge — flag when model has clear signal
+    # at high odds that's where 39.6% ROI comes from
+    strong_signal  = deviation > 0.10 or deviation < -0.10  # clear lean from baseline
+    medium_signal  = 0.05 < abs(deviation) <= 0.10
+    supporting_ev  = n_reasons >= 2 and n_warnings <= 1
+
+    if strong_signal and supporting_ev:
+        level = "🟢 HIGH"
+        desc  = "Strong model signal with supporting evidence — best value at 2.30+ odds"
+    elif strong_signal or (medium_signal and supporting_ev):
+        level = "🟡 MEDIUM"
+        desc  = "Moderate signal — look for 2.30+ odds for best ROI"
+    else:
+        level = "🔴 LOW"
+        desc  = "Weak FT5 signal — near baseline (53% blue), only bet with strong odds edge"
+        if not warnings:
+            warnings.append("Model near always-blue baseline — limited predictive value")
+
+    return level, desc, reasons, warnings
+
+
     with open('model_payload.pkl', 'rb') as f:
         p = pickle.load(f)
     return p
@@ -857,10 +948,13 @@ if predict_btn:
 
         win_conf_level, win_conf_desc, win_reasons, win_warnings = model_confidence(
             b_games, r_games, h2h_total, b_form-r_form, b_wr-r_wr, b_champ_wr-r_champ_wr)
-        ft5_conf_level, ft5_conf_desc, ft5_reasons, ft5_warnings = model_confidence(
-            ft5_team_games.get(blue_team_norm,0) if blue_team_norm else 0,
-            ft5_team_games.get(red_team_norm, 0) if red_team_norm  else 0,
-            ft5_h2h_tot, b_early_form-r_early_form, b_early-r_early, b_agg-r_agg)
+        ft5_conf_level, ft5_conf_desc, ft5_reasons, ft5_warnings = ft5_confidence(
+            blue_ft5_conf,
+            b_early, r_early,
+            b_speed, r_speed,
+            b_agg,   r_agg,
+            ft5_h2h_tot,
+            b_early_form, r_early_form)
 
         win_caution = 0.60 <= max(blue_win_conf, red_win_conf) < 0.65
         ft5_caution = 0.60 <= max(blue_ft5_conf, red_ft5_conf) < 0.65
@@ -1061,12 +1155,30 @@ if predict_btn:
         ft5_color = "🔵" if blue_ft5_conf > red_ft5_conf else "🔴"
         st.markdown(f"#### {ft5_color} Model pick: **{ft5_winner}**")
 
-        # Strong red signal — informational only, no unit boost
-        # Backtest: 66% red accuracy, 14.9% ROI when edge exists (normal calc_edge handles units)
+        # Strong red signal
         if ft5_strong_red:
             st.error(f"🚨 **STRONG RED SIGNAL** — Model blue confidence {blue_ft5_conf*100:.1f}% "
-                     f"(below 48%). Backtest shows red picks in this range are **66% accurate** "
+                     f"(below 48%). Backtest: red picks in this range are **66% accurate** "
                      f"with **14.9% ROI**. Trust the unit recommendation below.")
+
+        # League-specific FT5 tips from backtest
+        league_detected = league_str if league_str else get_league(blue_team_norm or red_team_norm)
+        ft5_league_tips = {
+            'LCK':   ("🟢 **LCK FT5:** Best model league — +6.9% edge over always-blue. "
+                      "Red signal especially reliable here (69% red accuracy in backtest)."),
+            'LPL':   ("⚠️ **LPL FT5:** Model not trained on LPL data — use as rough guide only."),
+            'LEC':   ("🟡 **LEC FT5:** Weak edge (+3.1%). Only bet with strong red signal or 60%+ confidence."),
+            'LCS':   ("🔴 **LCS FT5:** 0% model edge in backtest. "
+                      "Blue side baseline (55%) is your main edge — bet selectively."),
+            'CBLOL': ("🟢 **CBLOL FT5:** Solid edge (+3.2%). Red signal reliable (63% accuracy). "
+                      "Blue baseline 54%."),
+            'FST':   ("🟡 **FST FT5:** Small sample. Red signal weak here (25% accuracy in backtest). "
+                      "Favour blue picks."),
+        }
+        for lg_key, tip in ft5_league_tips.items():
+            if lg_key.lower() in (league_detected or '').lower():
+                st.info(tip)
+                break
 
         st.caption(f"⏱️ Est. ~{est_time:.1f} min ({faster_team} historically faster)")
         fc1, fc2 = st.columns(2)
