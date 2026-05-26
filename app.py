@@ -16,7 +16,7 @@ st.set_page_config(
 )
 
 st.title("🎮 LoL Pro Match Predictor")
-st.caption("V8 | Win + First to Five | ~67.50% win accuracy / AUC 0.7172 | Gold trajectory features")
+st.caption("V8.1 | Win + First to Five | ~66.3% win acc / 57.9% FT5 acc | Patch features + FT5 isotonic calibration")
 
 FORM_WINDOW       = 8
 RECENT_WINDOW     = 20
@@ -111,99 +111,8 @@ def model_confidence(b_games, r_games, h2h_total,
     else:            level, desc = "🔴 LOW",    "Limited data or conflicting signals"
     return level, desc, reasons, warnings_list
 
-def ft5_confidence(blue_prob, b_early_rate, r_early_rate,
-                   b_kill_speed, r_kill_speed, b_agg, r_agg,
-                   h2h_total, b_early_form, r_early_form):
-    """
-    FT5 confidence calibrated to BETTING VALUE from backtest:
-
-    Backtest findings:
-    - Strong red signal (blue_prob < 0.48): 61% accuracy but 7.2% ROI
-      → good for accuracy, poor for value due to odds compression
-    - LOW conf + 2.30+ odds: 39.6% ROI — best betting value
-    - Overall model edge: +4.04% over always-blue (53.3% baseline)
-
-    Confidence reflects expected betting value, not raw model accuracy.
-    HIGH = best ROI conditions | MEDIUM = decent value | LOW = weak signal
-    """
-    reasons  = []
-    warnings = []
-
-    # Strong red signal — highest accuracy but note odds compression
-    if blue_prob < 0.48:
-        red_prob = 1 - blue_prob
-        reasons.append(f"Strong red signal — model blue conf {blue_prob*100:.1f}% (below 48%)")
-        reasons.append("Backtest: 61% red accuracy across 123 games")
-        warnings.append("⚠️ Check odds — red signal games often get compressed odds (7.2% ROI backtest)")
-        level = "🟡 MEDIUM"
-        desc  = "High accuracy red pick — verify odds offer value before betting"
-        return level, desc, reasons, warnings
-
-    # Model signal strength beyond baseline
-    deviation = blue_prob - 0.53  # distance from 53% blue baseline
-    blue_pick = blue_prob >= 0.50
-
-    # Kill speed — most direct signal
-    speed_gap = 0
-    if b_kill_speed > 0 and r_kill_speed > 0:
-        speed_gap = abs(b_kill_speed - r_kill_speed)
-        if speed_gap >= 3:
-            faster = "Blue" if b_kill_speed < r_kill_speed else "Red"
-            reasons.append(f"{faster} gets kills {speed_gap:.1f} min faster historically")
-        elif speed_gap >= 1.5:
-            reasons.append("Moderate kill speed gap between teams")
-        else:
-            warnings.append("Similar kill speeds — FT5 hard to call")
-
-    # Early rate gap
-    early_diff = abs(b_early_rate - r_early_rate)
-    if early_diff >= 0.15:
-        faster = "Blue" if b_early_rate > r_early_rate else "Red"
-        reasons.append(f"{faster} wins FT5 races significantly more often")
-    elif early_diff >= 0.08:
-        reasons.append("Moderate early rate advantage")
-    else:
-        warnings.append("Teams have similar FT5 win rates")
-
-    # Aggression
-    agg_diff = abs(b_agg - r_agg)
-    if agg_diff >= 0.08:
-        more_agg = "Blue" if b_agg > r_agg else "Red"
-        reasons.append(f"{more_agg} comp meaningfully more aggressive")
-    elif agg_diff < 0.03:
-        warnings.append("Similar comp aggression")
-
-    # H2H
-    if h2h_total >= 8:
-        reasons.append(f"Good early H2H sample ({h2h_total} games)")
-    elif h2h_total < 3:
-        warnings.append("Limited H2H early game data")
-
-    n_reasons  = len(reasons)
-    n_warnings = len(warnings)
-
-    # Calibrate to ROI findings:
-    # Best ROI comes from 2.30+ odds + any edge — flag when model has clear signal
-    # at high odds that's where 39.6% ROI comes from
-    strong_signal  = deviation > 0.10 or deviation < -0.10  # clear lean from baseline
-    medium_signal  = 0.05 < abs(deviation) <= 0.10
-    supporting_ev  = n_reasons >= 2 and n_warnings <= 1
-
-    if strong_signal and supporting_ev:
-        level = "🟢 HIGH"
-        desc  = "Strong model signal with supporting evidence — best value at 2.30+ odds"
-    elif strong_signal or (medium_signal and supporting_ev):
-        level = "🟡 MEDIUM"
-        desc  = "Moderate signal — look for 2.30+ odds for best ROI"
-    else:
-        level = "🔴 LOW"
-        desc  = "Weak FT5 signal — near baseline (53% blue), only bet with strong odds edge"
-        if not warnings:
-            warnings.append("Model near always-blue baseline — limited predictive value")
-
-    return level, desc, reasons, warnings
-
-
+@st.cache_resource
+def load_models():
     with open('model_payload.pkl', 'rb') as f:
         p = pickle.load(f)
     return p
@@ -237,6 +146,22 @@ RC_WEIGHT        = p.get('rc_weight', 0.90)
 H2H_CAP          = p.get('h2h_cap',  0.60)
 gold_lookup      = p.get('gold_lookup', {})
 GOLD_WINDOW      = p.get('gold_window', 15)
+
+# V8.1 NEW: patch features
+patch_release    = p.get('patch_release', {})  # str patch -> ISO date string
+patch_champ      = p.get('patch_champ', {})    # (patch, champ) -> [wins, games]
+champ_recent_pkl = p.get('champ_recent', {})   # champ -> [(iso_date, win), ...]
+PATCH_WINDOW_DAYS = p.get('patch_window_days', 30)
+# Convert ISO strings back to datetimes for runtime use
+patch_release_dt = {k: datetime.fromisoformat(v) for k, v in patch_release.items()} if patch_release else {}
+champ_recent     = {c: [(datetime.fromisoformat(d), w) for d, w in lst]
+                    for c, lst in champ_recent_pkl.items()} if champ_recent_pkl else {}
+
+# V8.1 NEW: isotonic calibrators (FT5 only by default — win-model raw was better in backtest)
+win_calibrator   = p.get('win_calibrator', None)
+ft5_calibrator   = p.get('ft5_calibrator', None)
+APPLY_WIN_CALIB  = p.get('apply_win_calib', False)
+APPLY_FT5_CALIB  = p.get('apply_ft5_calib', True)
 
 POSITIONS  = ['top', 'jng', 'mid', 'adc', 'sup']
 POS_LABELS = ['Top', 'Jng', 'Mid', 'ADC', 'Sup']
@@ -295,6 +220,7 @@ defaults = {
     'red_p_top':  '', 'red_p_jg':  '', 'red_p_mid':  '',
     'red_p_adc':  '', 'red_p_sup':  '',
     'game_number': '',
+    'current_patch': '',
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -347,6 +273,39 @@ def get_gold_features(team_name, match_date=None):
             return entry.get('avg_gd20', 0.0), entry.get('late_scaling', 0.0)
     return 0.0, 0.0
 
+# V8.1 NEW: patch feature helpers
+def get_champ_patch_winrate(champ, patch, ref_date=None):
+    """Champion winrate on current patch if >=5 games, else 30-day rolling, else 0.5.
+    Gracefully handles brand-new patches with no data."""
+    from datetime import datetime, timedelta
+    if ref_date is None: ref_date = datetime.now()
+    elif isinstance(ref_date, str): ref_date = datetime.strptime(ref_date[:10], '%Y-%m-%d')
+    w_g = patch_champ.get((patch, champ))
+    if w_g and w_g[1] >= 5:
+        return w_g[0] / w_g[1]
+    cutoff = ref_date - timedelta(days=PATCH_WINDOW_DAYS)
+    recent = [w for d, w in champ_recent.get(champ, []) if d >= cutoff]
+    if len(recent) >= 5:
+        return sum(recent) / len(recent)
+    return 0.5
+
+def get_patch_age_days(patch, ref_date=None):
+    """Days since this patch first appeared. 0 if brand new (unseen)."""
+    from datetime import datetime
+    if ref_date is None: ref_date = datetime.now()
+    elif isinstance(ref_date, str): ref_date = datetime.strptime(ref_date[:10], '%Y-%m-%d')
+    release = patch_release_dt.get(patch)
+    if release is None: return 0
+    return max(0, (ref_date - release).days)
+
+def get_team_patch_features(picks, patch, ref_date=None):
+    """Returns (avg_patch_wr, patch_age_days, is_new_patch) for a 5-champ team."""
+    if not picks or not patch:
+        return 0.5, 0, 0
+    wrs = [get_champ_patch_winrate(c, patch, ref_date) for c in picks]
+    age = get_patch_age_days(patch, ref_date)
+    return (sum(wrs)/len(wrs), age, 1 if age < 7 else 0)
+
 def odds_label(odds):
     if odds < 1.60:    return "⚠️ Low odds"
     elif odds >= 2.30: return "🔥 Great odds"
@@ -396,6 +355,7 @@ def get_draft_only_prediction(blue, red, b_champ_wr, r_champ_wr, b_pc_avg, r_pc_
         b_pc_avg, r_pc_avg, b_pc_avg - r_pc_avg,
         0.0, 0.0, 0.0,
         0.0, 0.0, 0.0,
+        0.5, 0.5, 0.0, 30, 0,
     ]], columns=[
         'blue_team_winrate','red_team_winrate','team_winrate_diff',
         'blue_team_games','red_team_games',
@@ -405,6 +365,8 @@ def get_draft_only_prediction(blue, red, b_champ_wr, r_champ_wr, b_pc_avg, r_pc_
         'blue_side_advantage','blue_pc_avg','red_pc_avg','pc_avg_diff',
         'blue_avg_gd20','red_avg_gd20','gd20_diff',
         'blue_late_scaling','red_late_scaling','late_scaling_diff',
+        'blue_patch_champ_wr','red_patch_champ_wr','patch_champ_wr_diff',
+        'patch_age_days','is_new_patch',
     ])
     win_prob = win_model.predict_proba(pd.concat([b_win_enc, r_win_enc, neutral_row], axis=1))[0]
     b_ft5_enc = pd.DataFrame(ft5_mlb.transform([blue]),
@@ -764,6 +726,12 @@ with col2:
 gc1, gc2, gc3 = st.columns([1, 2, 2])
 with gc1:
     game_number = st.text_input("Game #", key='game_number', placeholder="1, 2, 3...")
+    # V8.1 NEW: patch input — auto-fills latest known patch, can be overridden for new ones
+    latest_patch = max(patch_release_dt.keys(), key=lambda p: patch_release_dt[p]) if patch_release_dt else ""
+    current_patch = st.text_input("Patch", key='current_patch',
+                                   value=latest_patch, placeholder="e.g. 26.05",
+                                   help="Defaults to latest known patch. Override for new patches; "
+                                        "model falls back to 30-day rolling winrate if patch is unknown.")
 with gc2:
     st.markdown("**Match Winner**")
     win_blue_odds = st.number_input("Blue odds", min_value=1.01, max_value=10.0,
@@ -858,6 +826,13 @@ if predict_btn:
         b_gd20, b_late = get_gold_features(blue_team_norm) if blue_team_norm else (0.0, 0.0)
         r_gd20, r_late = get_gold_features(red_team_norm)  if red_team_norm  else (0.0, 0.0)
 
+        # V8.1 NEW: patch features
+        patch_for_pred = current_patch.strip() if current_patch.strip() else (
+            max(patch_release_dt.keys(), key=lambda p: patch_release_dt[p]) if patch_release_dt else ""
+        )
+        b_patch_wr, patch_age, is_new = get_team_patch_features(blue, patch_for_pred) if blue else (0.5, 0, 0)
+        r_patch_wr, _,         _      = get_team_patch_features(red,  patch_for_pred) if red  else (0.5, 0, 0)
+
         win_extra = pd.DataFrame([[
             b_wr, r_wr, b_wr-r_wr, b_games, r_games,
             b_champ_wr, r_champ_wr, b_champ_wr-r_champ_wr,
@@ -866,6 +841,8 @@ if predict_btn:
             BLUE_SIDE_WINRATE, b_pc_avg, r_pc_avg, b_pc_avg-r_pc_avg,
             b_gd20, r_gd20, b_gd20-r_gd20,
             b_late, r_late, b_late-r_late,
+            b_patch_wr, r_patch_wr, b_patch_wr-r_patch_wr,
+            patch_age, is_new,
         ]], columns=[
             'blue_team_winrate','red_team_winrate','team_winrate_diff',
             'blue_team_games','red_team_games',
@@ -875,8 +852,15 @@ if predict_btn:
             'blue_side_advantage','blue_pc_avg','red_pc_avg','pc_avg_diff',
             'blue_avg_gd20','red_avg_gd20','gd20_diff',
             'blue_late_scaling','red_late_scaling','late_scaling_diff',
+            'blue_patch_champ_wr','red_patch_champ_wr','patch_champ_wr_diff',
+            'patch_age_days','is_new_patch',
         ])
         win_prob_raw  = win_model.predict_proba(pd.concat([b_win_enc,r_win_enc,win_extra],axis=1))[0]
+        # V8.1: optional isotonic calibration (off by default for win model — backtest showed raw is better)
+        if APPLY_WIN_CALIB and win_calibrator is not None:
+            blue_raw = win_prob_raw[1]
+            blue_cal = float(win_calibrator.predict([blue_raw])[0])
+            win_prob_raw = [1 - blue_cal, blue_cal]
         # Clip to 5%-95% — prevents 100% confidence outputs
         blue_win_conf = min(max(win_prob_raw[1], 0.05), 0.95)
         red_win_conf  = min(max(win_prob_raw[0], 0.05), 0.95)
@@ -921,6 +905,11 @@ if predict_btn:
             'h2h_early_rate','blue_early_form','red_early_form','early_form_diff',
         ])
         ft5_prob_raw  = ft5_model.predict_proba(pd.concat([b_ft5_enc,r_ft5_enc,ft5_extra],axis=1))[0]
+        # V8.1: optional isotonic calibration (on by default for FT5 — small improvement on 50-60% bands)
+        if APPLY_FT5_CALIB and ft5_calibrator is not None:
+            blue_raw = ft5_prob_raw[1]
+            blue_cal = float(ft5_calibrator.predict([blue_raw])[0])
+            ft5_prob_raw = [1 - blue_cal, blue_cal]
         # Clip to 5%-95%
         blue_ft5_conf = min(max(ft5_prob_raw[1], 0.05), 0.95)
         red_ft5_conf  = min(max(ft5_prob_raw[0], 0.05), 0.95)
@@ -948,13 +937,10 @@ if predict_btn:
 
         win_conf_level, win_conf_desc, win_reasons, win_warnings = model_confidence(
             b_games, r_games, h2h_total, b_form-r_form, b_wr-r_wr, b_champ_wr-r_champ_wr)
-        ft5_conf_level, ft5_conf_desc, ft5_reasons, ft5_warnings = ft5_confidence(
-            blue_ft5_conf,
-            b_early, r_early,
-            b_speed, r_speed,
-            b_agg,   r_agg,
-            ft5_h2h_tot,
-            b_early_form, r_early_form)
+        ft5_conf_level, ft5_conf_desc, ft5_reasons, ft5_warnings = model_confidence(
+            ft5_team_games.get(blue_team_norm,0) if blue_team_norm else 0,
+            ft5_team_games.get(red_team_norm, 0) if red_team_norm  else 0,
+            ft5_h2h_tot, b_early_form-r_early_form, b_early-r_early, b_agg-r_agg)
 
         win_caution = 0.60 <= max(blue_win_conf, red_win_conf) < 0.65
         ft5_caution = 0.60 <= max(blue_ft5_conf, red_ft5_conf) < 0.65
@@ -1155,30 +1141,12 @@ if predict_btn:
         ft5_color = "🔵" if blue_ft5_conf > red_ft5_conf else "🔴"
         st.markdown(f"#### {ft5_color} Model pick: **{ft5_winner}**")
 
-        # Strong red signal
+        # Strong red signal — informational only, no unit boost
+        # Backtest: 66% red accuracy, 14.9% ROI when edge exists (normal calc_edge handles units)
         if ft5_strong_red:
             st.error(f"🚨 **STRONG RED SIGNAL** — Model blue confidence {blue_ft5_conf*100:.1f}% "
-                     f"(below 48%). Backtest: red picks in this range are **66% accurate** "
+                     f"(below 48%). Backtest shows red picks in this range are **66% accurate** "
                      f"with **14.9% ROI**. Trust the unit recommendation below.")
-
-        # League-specific FT5 tips from backtest
-        league_detected = league_str if league_str else get_league(blue_team_norm or red_team_norm)
-        ft5_league_tips = {
-            'LCK':   ("🟢 **LCK FT5:** Best model league — +6.9% edge over always-blue. "
-                      "Red signal especially reliable here (69% red accuracy in backtest)."),
-            'LPL':   ("⚠️ **LPL FT5:** Model not trained on LPL data — use as rough guide only."),
-            'LEC':   ("🟡 **LEC FT5:** Weak edge (+3.1%). Only bet with strong red signal or 60%+ confidence."),
-            'LCS':   ("🔴 **LCS FT5:** 0% model edge in backtest. "
-                      "Blue side baseline (55%) is your main edge — bet selectively."),
-            'CBLOL': ("🟢 **CBLOL FT5:** Solid edge (+3.2%). Red signal reliable (63% accuracy). "
-                      "Blue baseline 54%."),
-            'FST':   ("🟡 **FST FT5:** Small sample. Red signal weak here (25% accuracy in backtest). "
-                      "Favour blue picks."),
-        }
-        for lg_key, tip in ft5_league_tips.items():
-            if lg_key.lower() in (league_detected or '').lower():
-                st.info(tip)
-                break
 
         st.caption(f"⏱️ Est. ~{est_time:.1f} min ({faster_team} historically faster)")
         fc1, fc2 = st.columns(2)
@@ -1298,4 +1266,4 @@ if predict_btn:
             st.caption(" | ".join(status_parts))
 
         st.divider()
-        st.caption("V8 | Win 67.50% / AUC 0.7172 | FT5 58.56% | Best ROI at 2.30+ odds (81.6%)")
+        st.caption("V8.1 | Win 66.3% / AUC 0.6930 | FT5 57.9% / AUC 0.5995 | Patch features + FT5 calibration")
