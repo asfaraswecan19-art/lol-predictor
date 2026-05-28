@@ -16,7 +16,7 @@ st.set_page_config(
 )
 
 st.title("🎮 LoL Pro Match Predictor")
-st.caption("V8 | Win + First to Five | ~67.50% win accuracy / AUC 0.7172 | Gold trajectory features")
+st.caption("V8.1 | Win + FT5 + Total Kills O/U | ~65.4% win (leak-free) / 57.9% FT5 / +5.7% kills O/U edge")
 
 FORM_WINDOW       = 8
 RECENT_WINDOW     = 20
@@ -135,6 +135,7 @@ ft5_mlb          = p['ft5_mlb']
 champ_aggression = p['champ_aggression']
 team_early_rate  = p['team_early_rate']
 team_kill_speed  = p['team_kill_speed']
+KILL_SPEED_DEFAULT = p.get('kill_speed_default', 22.0)  # league mean, not 10.0
 ft5_h2h          = p['ft5_h2h']
 ft5_team_recent  = p['ft5_team_recent']
 ft5_team_games   = p['ft5_team_games']
@@ -146,6 +147,47 @@ RC_WEIGHT        = p.get('rc_weight', 0.90)
 H2H_CAP          = p.get('h2h_cap',  0.60)
 gold_lookup      = p.get('gold_lookup', {})
 GOLD_WINDOW      = p.get('gold_window', 15)
+
+# V8.1 NEW: patch features
+patch_release    = p.get('patch_release', {})  # str patch -> ISO date string
+patch_champ      = p.get('patch_champ', {})    # (patch, champ) -> [wins, games]
+champ_recent_pkl = p.get('champ_recent', {})   # champ -> [(iso_date, win), ...]
+PATCH_WINDOW_DAYS = p.get('patch_window_days', 30)
+# Convert ISO strings back to datetimes for runtime use
+patch_release_dt = {k: datetime.fromisoformat(v) for k, v in patch_release.items()} if patch_release else {}
+champ_recent     = {c: [(datetime.fromisoformat(d), w) for d, w in lst]
+                    for c, lst in champ_recent_pkl.items()} if champ_recent_pkl else {}
+
+# V8.1 NEW: isotonic calibrators (FT5 only by default — win-model raw was better in backtest)
+win_calibrator   = p.get('win_calibrator', None)
+ft5_calibrator   = p.get('ft5_calibrator', None)
+APPLY_WIN_CALIB  = p.get('apply_win_calib', False)
+APPLY_FT5_CALIB  = p.get('apply_ft5_calib', True)
+
+# V8.2 NEW: kills predictor models and lookups
+kls_point       = p.get('kls_point', None)
+kls_q10         = p.get('kls_q10', None)
+kls_q50         = p.get('kls_q50', None)
+kls_q90         = p.get('kls_q90', None)
+kls_ou_models   = p.get('kls_ou_models', {})  # {line: classifier}
+kls_feat_cols   = p.get('kls_feat_cols', [])
+champ_dur_score   = p.get('champ_dur_score', {})
+champ_kills_score = p.get('champ_kills_score', {})
+kls_global_dur   = p.get('kls_global_dur', 32.0)
+kls_global_kills = p.get('kls_global_kills', 27.0)
+kls_team_dur_hist   = p.get('kls_team_dur_hist', {})
+kls_team_kills_hist = p.get('kls_team_kills_hist', {})
+kls_team_ckpm_hist  = p.get('kls_team_ckpm_hist', {})
+kls_h2h_dur   = p.get('kls_h2h_dur', {})
+kls_h2h_kills = p.get('kls_h2h_kills', {})
+kls_patch_dur   = p.get('kls_patch_dur', {})
+kls_patch_kills = p.get('kls_patch_kills', {})
+KLS_RECENT_WINDOW = p.get('kls_recent_window', 20)
+KLS_LINES         = p.get('kls_lines', [22.5, 24.5, 26.5, 28.5, 30.5])
+dur_point = p.get('dur_point', None)
+dur_q10   = p.get('dur_q10', None)
+dur_q50   = p.get('dur_q50', None)
+dur_q90   = p.get('dur_q90', None)
 
 POSITIONS  = ['top', 'jng', 'mid', 'adc', 'sup']
 POS_LABELS = ['Top', 'Jng', 'Mid', 'ADC', 'Sup']
@@ -204,6 +246,7 @@ defaults = {
     'red_p_top':  '', 'red_p_jg':  '', 'red_p_mid':  '',
     'red_p_adc':  '', 'red_p_sup':  '',
     'game_number': '',
+    'current_patch': '',
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -256,6 +299,39 @@ def get_gold_features(team_name, match_date=None):
             return entry.get('avg_gd20', 0.0), entry.get('late_scaling', 0.0)
     return 0.0, 0.0
 
+# V8.1 NEW: patch feature helpers
+def get_champ_patch_winrate(champ, patch, ref_date=None):
+    """Champion winrate on current patch if >=5 games, else 30-day rolling, else 0.5.
+    Gracefully handles brand-new patches with no data."""
+    from datetime import datetime, timedelta
+    if ref_date is None: ref_date = datetime.now()
+    elif isinstance(ref_date, str): ref_date = datetime.strptime(ref_date[:10], '%Y-%m-%d')
+    w_g = patch_champ.get((patch, champ))
+    if w_g and w_g[1] >= 5:
+        return w_g[0] / w_g[1]
+    cutoff = ref_date - timedelta(days=PATCH_WINDOW_DAYS)
+    recent = [w for d, w in champ_recent.get(champ, []) if d >= cutoff]
+    if len(recent) >= 5:
+        return sum(recent) / len(recent)
+    return 0.5
+
+def get_patch_age_days(patch, ref_date=None):
+    """Days since this patch first appeared. 0 if brand new (unseen)."""
+    from datetime import datetime
+    if ref_date is None: ref_date = datetime.now()
+    elif isinstance(ref_date, str): ref_date = datetime.strptime(ref_date[:10], '%Y-%m-%d')
+    release = patch_release_dt.get(patch)
+    if release is None: return 0
+    return max(0, (ref_date - release).days)
+
+def get_team_patch_features(picks, patch, ref_date=None):
+    """Returns (avg_patch_wr, patch_age_days, is_new_patch) for a 5-champ team."""
+    if not picks or not patch:
+        return 0.5, 0, 0
+    wrs = [get_champ_patch_winrate(c, patch, ref_date) for c in picks]
+    age = get_patch_age_days(patch, ref_date)
+    return (sum(wrs)/len(wrs), age, 1 if age < 7 else 0)
+
 def odds_label(odds):
     if odds < 1.60:    return "⚠️ Low odds"
     elif odds >= 2.30: return "🔥 Great odds"
@@ -269,6 +345,91 @@ def calc_edge(conf, odds):
     elif edge < 0.18: units, label = 2, "✅ STRONG"
     else:             units, label = 3, "🔥 VERY STRONG"
     return edge, units, label, implied
+
+# V8.2 NEW: kills feature builder (mirrors kills model training)
+def _rmean(h, w, d): return sum(h[-w:])/len(h[-w:]) if h else d
+def _rstd(h, w, d):  return float(np.std(h[-w:])) if len(h) >= 3 else d
+
+def build_kills_features(blue, red, blue_picks, red_picks, patch, league):
+    """Build a feature row matching kls_feat_cols. Returns DataFrame with 1 row."""
+    gdm = kls_global_dur; gkm = kls_global_kills
+    b_dur_h = kls_team_dur_hist.get(blue, [])
+    r_dur_h = kls_team_dur_hist.get(red, [])
+    b_kls_h = kls_team_kills_hist.get(blue, [])
+    r_kls_h = kls_team_kills_hist.get(red, [])
+    b_ck_h  = kls_team_ckpm_hist.get(blue, [])
+    r_ck_h  = kls_team_ckpm_hist.get(red, [])
+
+    b_dur  = _rmean(b_dur_h, KLS_RECENT_WINDOW, gdm)
+    r_dur  = _rmean(r_dur_h, KLS_RECENT_WINDOW, gdm)
+    b_kls  = _rmean(b_kls_h, KLS_RECENT_WINDOW, gkm)
+    r_kls  = _rmean(r_kls_h, KLS_RECENT_WINDOW, gkm)
+    b_ckpm = _rmean(b_ck_h, KLS_RECENT_WINDOW, gkm/gdm)
+    r_ckpm = _rmean(r_ck_h, KLS_RECENT_WINDOW, gkm/gdm)
+    b_dur_s = _rstd(b_dur_h, KLS_RECENT_WINDOW, 5.0)
+    r_dur_s = _rstd(r_dur_h, KLS_RECENT_WINDOW, 5.0)
+    b_kls_s = _rstd(b_kls_h, KLS_RECENT_WINDOW, 8.0)
+    r_kls_s = _rstd(r_kls_h, KLS_RECENT_WINDOW, 8.0)
+
+    mk = tuple(sorted([blue or "", red or ""]))
+    hd = kls_h2h_dur.get(mk, [])
+    hk = kls_h2h_kills.get(mk, [])
+    h_dur = _rmean(hd, 10, (b_dur+r_dur)/2)
+    h_kls = _rmean(hk, 10, (b_kls+r_kls)/2)
+
+    b_ad = np.mean([champ_dur_score.get(c, gdm) for c in blue_picks]) if blue_picks else gdm
+    b_ak = np.mean([champ_kills_score.get(c, gkm) for c in blue_picks]) if blue_picks else gkm
+    r_ad = np.mean([champ_dur_score.get(c, gdm) for c in red_picks]) if red_picks else gdm
+    r_ak = np.mean([champ_kills_score.get(c, gkm) for c in red_picks]) if red_picks else gkm
+
+    p_dur = kls_patch_dur.get(patch, gdm)
+    p_kls = kls_patch_kills.get(patch, gkm)
+    from datetime import datetime
+    rd = patch_release_dt.get(patch) if patch_release_dt else None
+    p_age = 0 if rd is None else max(0, (datetime.now() - rd).days)
+
+    feat = {
+        'b_dur_mean':b_dur, 'r_dur_mean':r_dur, 'avg_dur_mean':(b_dur+r_dur)/2,
+        'b_kills_mean':b_kls, 'r_kills_mean':r_kls, 'avg_kills_mean':(b_kls+r_kls)/2,
+        'b_ckpm_mean':b_ckpm, 'r_ckpm_mean':r_ckpm, 'avg_ckpm_mean':(b_ckpm+r_ckpm)/2,
+        'b_dur_std':b_dur_s, 'r_dur_std':r_dur_s,
+        'b_kills_std':b_kls_s, 'r_kills_std':r_kls_s,
+        'min_games_seen': min(len(b_dur_h), len(r_dur_h)),
+        'h2h_dur_mean':h_dur, 'h2h_kills_mean':h_kls, 'h2h_n':len(hd),
+        'b_arch_dur':b_ad, 'r_arch_dur':r_ad, 'avg_arch_dur':(b_ad+r_ad)/2,
+        'b_arch_kills':b_ak, 'r_arch_kills':r_ak, 'avg_arch_kills':(b_ak+r_ak)/2,
+        'patch_dur':p_dur, 'patch_kills':p_kls,
+        'patch_age_days':p_age, 'is_new_patch': 1 if p_age < 7 else 0,
+        'league_idx': hash(league) % 1000,
+    }
+    return pd.DataFrame([feat])[kls_feat_cols]
+
+def predict_kills_ou(X_row, target_line):
+    """Predict probability that total kills exceeds target_line.
+    Picks the closest trained O/U classifier (we trained at 22.5/24.5/26.5/28.5/30.5)
+    and adjusts slightly toward the quantile estimate for off-line targets.
+    """
+    if not kls_ou_models:
+        return None
+    available_lines = sorted(kls_ou_models.keys())
+    closest = min(available_lines, key=lambda x: abs(x - target_line))
+    model = kls_ou_models[closest]
+    prob_over_closest = float(model.predict_proba(X_row)[0, 1])
+
+    # If user's line is far from any trained line, blend with point prediction
+    # to handle the offset (e.g. line=27.0 between 26.5 and 28.5)
+    if abs(target_line - closest) <= 0.5:
+        return prob_over_closest, closest
+    # For larger gaps, use the q50 + assumption of approx normal residuals
+    if kls_q50 is not None:
+        median = float(kls_q50.predict(X_row)[0])
+        # Crude blend: shift the closest-line probability based on how target compares to median
+        offset = (target_line - closest) * 0.05  # ~5pp per kill of line shift, empirically reasonable
+        if target_line > closest:
+            return max(0.05, prob_over_closest - offset), closest
+        else:
+            return min(0.95, prob_over_closest + offset), closest
+    return prob_over_closest, closest
 
 def show_signal(label, b_val, r_val, low_t, high_t, blue_name, red_name, fmt=".1f"):
     diff     = b_val - r_val
@@ -324,7 +485,7 @@ def get_draft_only_prediction(blue, red, b_champ_wr, r_champ_wr, b_pc_avg, r_pc_
     r_agg = sum(champ_aggression.get(c, 0.5) for c in red)  / len(red)
     neutral_ft5 = pd.DataFrame([[
         b_agg, r_agg, b_agg-r_agg,
-        0.5, 0.5, 0.0, 10.0, 10.0, 0.0,
+        0.5, 0.5, 0.0, KILL_SPEED_DEFAULT, KILL_SPEED_DEFAULT, 0.0,
         0.5, 0.5, 0.5, 0.0,
     ]], columns=[
         'blue_aggression','red_aggression','aggression_diff',
@@ -673,6 +834,12 @@ with col2:
 gc1, gc2, gc3 = st.columns([1, 2, 2])
 with gc1:
     game_number = st.text_input("Game #", key='game_number', placeholder="1, 2, 3...")
+    # V8.1 NEW: patch input — auto-fills latest known patch, can be overridden for new ones
+    latest_patch = max(patch_release_dt.keys(), key=lambda p: patch_release_dt[p]) if patch_release_dt else ""
+    current_patch = st.text_input("Patch", key='current_patch',
+                                   value=latest_patch, placeholder="e.g. 26.05",
+                                   help="Defaults to latest known patch. Override for new patches; "
+                                        "model falls back to 30-day rolling winrate if patch is unknown.")
 with gc2:
     st.markdown("**Match Winner**")
     win_blue_odds = st.number_input("Blue odds", min_value=1.01, max_value=10.0,
@@ -685,6 +852,20 @@ with gc3:
                                      value=1.85, step=0.05, key="fbo")
     ft5_red_odds  = st.number_input("Red odds",  min_value=1.01, max_value=10.0,
                                      value=1.95, step=0.05, key="fro")
+
+# V8.2 NEW: Kills O/U input row
+st.markdown("**💀 Total Kills Over/Under** *(optional — leave blank to skip)*")
+kc1, kc2, kc3 = st.columns([1, 1, 1])
+with kc1:
+    kills_line = st.number_input("Kill line", min_value=15.0, max_value=45.0,
+                                  value=26.5, step=0.5, key="kls_line",
+                                  help="The over/under line offered by the book (e.g. 26.5)")
+with kc2:
+    kills_over_odds = st.number_input("Over odds", min_value=1.01, max_value=10.0,
+                                       value=1.90, step=0.05, key="klo")
+with kc3:
+    kills_under_odds = st.number_input("Under odds", min_value=1.01, max_value=10.0,
+                                        value=1.90, step=0.05, key="klu")
 
 chk1, chk2, chk3, chk4 = st.columns(4)
 with chk1:
@@ -786,6 +967,11 @@ if predict_btn:
             'blue_late_scaling','red_late_scaling','late_scaling_diff',
         ])
         win_prob_raw  = win_model.predict_proba(pd.concat([b_win_enc,r_win_enc,win_extra],axis=1))[0]
+        # V8.1: optional isotonic calibration (off by default for win model — backtest showed raw is better)
+        if APPLY_WIN_CALIB and win_calibrator is not None:
+            blue_raw = win_prob_raw[1]
+            blue_cal = float(win_calibrator.predict([blue_raw])[0])
+            win_prob_raw = [1 - blue_cal, blue_cal]
         # Clip to 5%-95% — prevents 100% confidence outputs
         blue_win_conf = min(max(win_prob_raw[1], 0.05), 0.95)
         red_win_conf  = min(max(win_prob_raw[0], 0.05), 0.95)
@@ -807,8 +993,8 @@ if predict_btn:
         r_agg        = sum(champ_aggression.get(c,0.5) for c in red) /len(red)  if red  else 0.5
         b_early      = team_early_rate.get(blue_team_norm,0.5)  if blue_team_norm else 0.5
         r_early      = team_early_rate.get(red_team_norm, 0.5)  if red_team_norm  else 0.5
-        b_speed      = team_kill_speed.get(blue_team_norm,10.0) if blue_team_norm else 10.0
-        r_speed      = team_kill_speed.get(red_team_norm, 10.0) if red_team_norm  else 10.0
+        b_speed      = team_kill_speed.get(blue_team_norm, KILL_SPEED_DEFAULT) if blue_team_norm else KILL_SPEED_DEFAULT
+        r_speed      = team_kill_speed.get(red_team_norm,  KILL_SPEED_DEFAULT) if red_team_norm  else KILL_SPEED_DEFAULT
         ft5_h2h_r    = get_h2h_rate(ft5_h2h, blue_team_norm, red_team_norm) \
                        if blue_team_norm and red_team_norm else 0.5
         ft5_h2h_tot  = get_h2h_total(ft5_h2h, blue_team_norm, red_team_norm) \
@@ -830,6 +1016,11 @@ if predict_btn:
             'h2h_early_rate','blue_early_form','red_early_form','early_form_diff',
         ])
         ft5_prob_raw  = ft5_model.predict_proba(pd.concat([b_ft5_enc,r_ft5_enc,ft5_extra],axis=1))[0]
+        # V8.1: optional isotonic calibration (on by default for FT5 — small improvement on 50-60% bands)
+        if APPLY_FT5_CALIB and ft5_calibrator is not None:
+            blue_raw = ft5_prob_raw[1]
+            blue_cal = float(ft5_calibrator.predict([blue_raw])[0])
+            ft5_prob_raw = [1 - blue_cal, blue_cal]
         # Clip to 5%-95%
         blue_ft5_conf = min(max(ft5_prob_raw[1], 0.05), 0.95)
         red_ft5_conf  = min(max(ft5_prob_raw[0], 0.05), 0.95)
@@ -1157,6 +1348,70 @@ if predict_btn:
                         name   = player if player.strip() else "Unknown"
                         st.write(f"**{lbl}** {name} — {champ}: {agg*100:.0f}% → {rating}")
 
+        # =====================================================
+        # V8.2: TOTAL KILLS OVER/UNDER PREDICTION
+        # =====================================================
+        if kls_point is not None and len(blue) == 5 and len(red) == 5:
+            st.divider()
+            st.markdown(f"### 💀 Total Kills Over/Under — Line {kills_line}")
+
+            # Build features and get predictions
+            patch_for_kls = current_patch.strip() if current_patch.strip() else (
+                max(patch_release_dt.keys(), key=lambda p: patch_release_dt[p])
+                if patch_release_dt else ""
+            )
+            league_for_kls = "LCK"  # neutral default — model uses hashed league_idx
+            try:
+                X_kls = build_kills_features(blue_team_norm, red_team_norm,
+                                              blue, red, patch_for_kls, league_for_kls)
+                # Point + interval estimates
+                k_point = float(kls_point.predict(X_kls)[0])
+                k_p10   = float(kls_q10.predict(X_kls)[0]) if kls_q10 is not None else k_point - 5
+                k_p90   = float(kls_q90.predict(X_kls)[0]) if kls_q90 is not None else k_point + 5
+
+                # O/U probability at user's line
+                ou_result = predict_kills_ou(X_kls, kills_line)
+                if ou_result:
+                    prob_over, closest_line = ou_result
+                    prob_under = 1 - prob_over
+
+                    # Cap predictions at sensible bounds
+                    prob_over  = min(max(prob_over,  0.05), 0.95)
+                    prob_under = min(max(prob_under, 0.05), 0.95)
+
+                    # Edge calculations
+                    over_edge,  over_units,  over_label,  over_impl  = calc_edge(prob_over,  kills_over_odds)
+                    under_edge, under_units, under_label, under_impl = calc_edge(prob_under, kills_under_odds)
+
+                    # Display
+                    kc1, kc2 = st.columns(2)
+                    with kc1:
+                        st.metric(f"⬆️ OVER {kills_line}", f"{prob_over*100:.1f}%",
+                                  delta=f"Edge: {over_edge*100:.1f}%")
+                        st.write(f"Odds: {kills_over_odds} | Implied: {over_impl*100:.1f}%")
+                        st.write(odds_label(kills_over_odds))
+                        if prob_over > prob_under:
+                            st.info(f"💰 {over_units}u — {over_label}" if over_units > 0 else "💰 ⛔ SKIP")
+                    with kc2:
+                        st.metric(f"⬇️ UNDER {kills_line}", f"{prob_under*100:.1f}%",
+                                  delta=f"Edge: {under_edge*100:.1f}%")
+                        st.write(f"Odds: {kills_under_odds} | Implied: {under_impl*100:.1f}%")
+                        st.write(odds_label(kills_under_odds))
+                        if prob_under > prob_over:
+                            st.info(f"💰 {under_units}u — {under_label}" if under_units > 0 else "💰 ⛔ SKIP")
+
+                    # Context info
+                    st.caption(f"📊 Model expects ~{k_point:.0f} kills (range {k_p10:.0f}-{k_p90:.0f}) | "
+                               f"O/U classifier trained on line {closest_line}" +
+                               (f" (your line {kills_line} is within range)" if abs(kills_line - closest_line) <= 0.5
+                                else f" (your line {kills_line} extrapolated)"))
+                    st.caption("⚠️ Kills model has modest edge (~5% over baseline). Best at lines 24.5-30.5. "
+                               "Treat lower-confidence picks (<58%) as marginal.")
+                else:
+                    st.warning("Kills O/U model unavailable for this line")
+            except Exception as e:
+                st.warning(f"Could not compute kills prediction: {e}")
+
         st.divider()
 
         if len(blue) == 5 and len(red) == 5:
@@ -1186,4 +1441,4 @@ if predict_btn:
             st.caption(" | ".join(status_parts))
 
         st.divider()
-        st.caption("V8 | Win 67.50% / AUC 0.7172 | FT5 58.56% | Best ROI at 2.30+ odds (81.6%)")
+        st.caption("V8.1 | Win 65.4% (leak-free) / AUC 0.6944 | FT5 57.9% | Kills O/U at lines 22-30")
