@@ -1,0 +1,112 @@
+{
+  "game_id": "115548128962971904",
+  "kills": [
+    {
+      "side": "red",
+      "kill_number_for_team": 1,
+      "t_secs": 239.727,
+      "ts": "2026-05-28T11:07:39.727Z"
+    },
+    {
+      "side": "blue",
+      "kill_number_for_team": 1,
+      "t_secs": 349.63,
+      "ts": "2026-05-28T11:09:29.630Z"
+    },
+    {
+      "side": "red",
+      "kill_number_for_team": 2,
+      "t_secs": 349.63,
+      "ts": "2026-05-28T11:09:29.630Z"
+    },
+    {
+      "side": "blue",
+      "kill_number_for_team": 2,
+      "t_secs": 369.807,
+      "ts": "2026-05-28T11:09:49.807Z"
+    },
+    {
+      "side": "red",
+      "kill_number_for_team": 3,
+      "t_secs": 549.639,
+      "ts": "2026-05-28T11:12:49.639Z"
+    },
+    {
+      "side": "red",
+      "kill_number_for_team": 4,
+      "t_secs": 779.953,
+      "ts": "2026-05-28T11:16:39.953Z"
+    },
+    {
+      "side": "blue",
+      "kill_number_for_team": 3,
+      "t_secs": 869.777,
+      "ts": "2026-05-28T11:18:09.777Z"
+    },
+    {
+      "side": "red",
+      "kill_number_for_team": 5,
+      "t_secs": 1019.63,
+      "ts": "2026-05-28T11:20:39.630Z"
+    },
+    {
+      "side": "blue",
+      "kill_number_for_team": 4,
+      "t_secs": 1049.622,
+      "ts": "2026-05-28T11:21:09.622Z"
+    },
+    {
+      "side": "blue",
+      "kill_number_for_team": 5,
+      "t_secs": 1259.849,
+      "ts": "2026-05-28T11:24:39.849Z"
+    },
+    {
+      "side": "blue",
+      "kill_number_for_team": 6,
+      "t_secs": 1599.617,
+      "ts": "2026-05-28T11:30:19.617Z"
+    },
+    {
+      "side": "blue",
+      "kill_number_for_team": 7,
+      "t_secs": 1689.667,
+      "ts": "2026-05-28T11:31:49.667Z"
+    },
+    {
+      "side": "blue",
+      "kill_number_for_team": 8,
+      "t_secs": 1689.667,
+      "ts": "2026-05-28T11:31:49.667Z"
+    },
+    {
+      "side": "blue",
+      "kill_number_for_team": 9,
+      "t_secs": 1729.806,
+      "ts": "2026-05-28T11:32:29.806Z"
+    },
+    {
+      "side": "blue",
+      "kill_number_for_team": 10,
+      "t_secs": 1729.806,
+      "ts": "2026-05-28T11:32:29.806Z"
+    },
+    {
+      "side": "blue",
+      "kill_number_for_team": 11,
+      "t_secs": 1736.192,
+      "ts": "2026-05-28T11:32:36.192Z"
+    }
+  ],
+  "summary": {
+    "blue_total_kills": 11,
+    "red_total_kills": 5,
+    "blue_time_to_5": 20.99748333333333,
+    "red_time_to_5": 16.993833333333335,
+    "blue_kills_at_10min": 2,
+    "red_kills_at_10min": 3,
+    "blue_kills_at_15min": 3,
+    "red_kills_at_15min": 4,
+    "first_to_five": "red"
+  }
+}

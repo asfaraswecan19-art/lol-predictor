@@ -1,0 +1,6 @@
+@echo off
+cd /d "C:\Users\Alex\OneDrive\Desktop\dataset builder"
+"C:\Users\Alex\AppData\Local\Python\pythoncore-3.14-64\python.exe" fetch_kills.py --tier1
+echo.
+echo === Finished. Press any key to close. ===
+pause
