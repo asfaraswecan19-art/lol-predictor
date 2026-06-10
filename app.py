@@ -2,7 +2,6 @@ import warnings
 warnings.filterwarnings('ignore')
 import streamlit as st
 import pandas as pd
-import numpy as np
 import pickle
 import requests
 import difflib
@@ -16,8 +15,96 @@ st.set_page_config(
     layout="centered"
 )
 
-st.title("🎮 LoL Pro Match Predictor")
-st.caption("V8.1 | Win + FT5 + Total Kills O/U | ~65.4% win (leak-free) / 57.9% FT5 / +5.7% kills O/U edge")
+st.markdown("""
+<style>
+  /* hide the white header toolbar */
+  header[data-testid="stHeader"] { display: none !important; }
+  #MainMenu { display: none !important; }
+  footer { display: none !important; }
+  .stDeployButton { display: none !important; }
+  div[data-testid="stToolbar"] { display: none !important; }
+  /* dark bg, zero top padding now toolbar is gone */
+  .stApp { background: #0a0c10; color: #d0d8f0; }
+  .block-container { padding-top: 0.75rem !important; }
+  hr { border-color: #1e2535 !important; }
+  .stTextInput > div > div > input,
+  .stTextArea > div > div > textarea,
+  .stNumberInput > div > div > input {
+    background: #0f1218 !important;
+    border: 1px solid #2a3050 !important;
+    color: #d0d8f0 !important;
+    border-radius: 6px !important;
+    outline: none !important;
+    box-shadow: none !important;
+    font-family: 'SF Mono','Fira Code','Consolas',monospace !important;
+  }
+  .stTextInput > div > div > input:focus,
+  .stTextArea > div > div > textarea:focus,
+  .stNumberInput > div > div > input:focus {
+    border-color: #3a6a30 !important;
+    box-shadow: 0 0 0 2px rgba(80,160,40,0.15) !important;
+    outline: none !important;
+  }
+  .stTextInput > div > div, .stTextArea > div > div, .stNumberInput > div > div {
+    border: none !important; box-shadow: none !important; background: transparent !important;
+  }
+  /* number input stepper buttons */
+  .stNumberInput > div > div > div { background: #0f1218 !important; }
+  button[data-testid="stNumberInputStepDown"],
+  button[data-testid="stNumberInputStepUp"] {
+    background: #0f1218 !important;
+    border-color: #2a3050 !important;
+    color: #4a6a30 !important;
+  }
+  button[data-testid="stNumberInputStepDown"]:hover,
+  button[data-testid="stNumberInputStepUp"]:hover {
+    background: #1a2a10 !important;
+    color: #80d040 !important;
+  }
+  /* kill any white wrapper divs around inputs */
+  .stNumberInput div[data-baseweb="input"] { background: #0f1218 !important; }
+  div[data-baseweb="base-input"] { background: #0f1218 !important; }
+  div[data-baseweb="input"] { background: #0f1218 !important; border-color: #2a3050 !important; }
+  label { color: #3a4a6a !important; font-size: 0.78rem !important;
+          font-family: 'SF Mono','Fira Code','Consolas',monospace !important;
+          text-transform: uppercase !important; letter-spacing: 0.08em !important; }
+  div[data-testid="stButton"] > button[kind="primary"] {
+    background: #0d1f05 !important; border: 1px solid #2a5a10 !important;
+    color: #80d040 !important; font-family: 'SF Mono','Fira Code',monospace !important;
+    font-weight: 700 !important; border-radius: 5px !important; letter-spacing: 0.06em !important;
+  }
+  div[data-testid="stButton"] > button[kind="secondary"] {
+    background: #0f1218 !important; border: 1px solid #1e2535 !important;
+    color: #4a5a7a !important; font-family: 'SF Mono','Fira Code',monospace !important;
+    border-radius: 5px !important;
+  }
+  div[data-testid="stButton"] > button[kind="secondary"]:hover {
+    border-color: #3a4a6a !important; color: #8090b0 !important;
+  }
+  div[data-testid="stExpander"] {
+    background: #0f1218 !important; border: 1px solid #1e2535 !important; border-radius: 6px !important;
+  }
+  div[data-testid="stExpander"] summary { color: #4a5a7a !important; font-family: 'SF Mono','Fira Code',monospace !important; }
+  div[data-testid="metric-container"] {
+    background: #0f1218; border: 1px solid #1e2535; border-radius: 6px; padding: 0.6rem 0.8rem;
+  }
+  div[data-testid="metric-container"] label { color: #3a4060 !important; }
+  div[data-testid="metric-container"] div[data-testid="stMetricValue"] { color: #c0f060 !important; font-size: 1.4rem !important; font-family: 'SF Mono','Fira Code',monospace !important; }
+  div[data-testid="metric-container"] div[data-testid="stMetricDelta"] svg { display:none; }
+  .stCheckbox label { color: #4a5a7a !important; text-transform: none !important; letter-spacing: 0 !important; }
+  p, .stMarkdown p { color: #8090b0; font-family: 'SF Mono','Fira Code',monospace; font-size: 0.82rem; }
+  h1,h2,h3 { font-family: 'SF Mono','Fira Code',monospace !important; color: #c0f060 !important; }
+  small, .stCaption { color: #3a4a6a !important; font-family: 'SF Mono','Fira Code',monospace !important; }
+  div[data-testid="stAlert"] { border-radius: 5px !important; font-family: 'SF Mono','Fira Code',monospace !important; }
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown('''
+<div style="border-bottom:1px solid #1e2535;padding-bottom:12px;margin-bottom:4px;">
+  <span style="color:#c0f060;font-size:1.3rem;font-weight:700;font-family:'SF Mono','Fira Code',monospace;letter-spacing:0.06em;">&#9672; LOL MATCH PREDICTOR v8</span>
+  <span style="color:#3a4a6a;font-size:0.72rem;font-family:'SF Mono','Fira Code',monospace;margin-left:12px;">Win ~67.50% / AUC 0.7172 &middot; FT5 58.56% &middot; Gold trajectory features</span>
+</div>
+''', unsafe_allow_html=True)
 
 FORM_WINDOW       = 8
 RECENT_WINDOW     = 20
@@ -112,6 +199,99 @@ def model_confidence(b_games, r_games, h2h_total,
     else:            level, desc = "🔴 LOW",    "Limited data or conflicting signals"
     return level, desc, reasons, warnings_list
 
+def ft5_confidence(blue_prob, b_early_rate, r_early_rate,
+                   b_kill_speed, r_kill_speed, b_agg, r_agg,
+                   h2h_total, b_early_form, r_early_form):
+    """
+    FT5 confidence calibrated to BETTING VALUE from backtest:
+
+    Backtest findings:
+    - Strong red signal (blue_prob < 0.48): 61% accuracy but 7.2% ROI
+      → good for accuracy, poor for value due to odds compression
+    - LOW conf + 2.30+ odds: 39.6% ROI — best betting value
+    - Overall model edge: +4.04% over always-blue (53.3% baseline)
+
+    Confidence reflects expected betting value, not raw model accuracy.
+    HIGH = best ROI conditions | MEDIUM = decent value | LOW = weak signal
+    """
+    reasons  = []
+    warnings = []
+
+    # Strong red signal — highest accuracy but note odds compression
+    if blue_prob < 0.48:
+        red_prob = 1 - blue_prob
+        reasons.append(f"Strong red signal — model blue conf {blue_prob*100:.1f}% (below 48%)")
+        reasons.append("Backtest: 61% red accuracy across 123 games")
+        warnings.append("⚠️ Check odds — red signal games often get compressed odds (7.2% ROI backtest)")
+        level = "🟡 MEDIUM"
+        desc  = "High accuracy red pick — verify odds offer value before betting"
+        return level, desc, reasons, warnings
+
+    # Model signal strength beyond baseline
+    deviation = blue_prob - 0.53  # distance from 53% blue baseline
+    blue_pick = blue_prob >= 0.50
+
+    # Kill speed — most direct signal
+    speed_gap = 0
+    if b_kill_speed > 0 and r_kill_speed > 0:
+        speed_gap = abs(b_kill_speed - r_kill_speed)
+        if speed_gap >= 3:
+            faster = "Blue" if b_kill_speed < r_kill_speed else "Red"
+            reasons.append(f"{faster} gets kills {speed_gap:.1f} min faster historically")
+        elif speed_gap >= 1.5:
+            reasons.append("Moderate kill speed gap between teams")
+        else:
+            warnings.append("Similar kill speeds — FT5 hard to call")
+
+    # Early rate gap
+    early_diff = abs(b_early_rate - r_early_rate)
+    if early_diff >= 0.15:
+        faster = "Blue" if b_early_rate > r_early_rate else "Red"
+        reasons.append(f"{faster} wins FT5 races significantly more often")
+    elif early_diff >= 0.08:
+        reasons.append("Moderate early rate advantage")
+    else:
+        warnings.append("Teams have similar FT5 win rates")
+
+    # Aggression
+    agg_diff = abs(b_agg - r_agg)
+    if agg_diff >= 0.08:
+        more_agg = "Blue" if b_agg > r_agg else "Red"
+        reasons.append(f"{more_agg} comp meaningfully more aggressive")
+    elif agg_diff < 0.03:
+        warnings.append("Similar comp aggression")
+
+    # H2H
+    if h2h_total >= 8:
+        reasons.append(f"Good early H2H sample ({h2h_total} games)")
+    elif h2h_total < 3:
+        warnings.append("Limited H2H early game data")
+
+    n_reasons  = len(reasons)
+    n_warnings = len(warnings)
+
+    # Calibrate to ROI findings:
+    # Best ROI comes from 2.30+ odds + any edge — flag when model has clear signal
+    # at high odds that's where 39.6% ROI comes from
+    strong_signal  = deviation > 0.10 or deviation < -0.10  # clear lean from baseline
+    medium_signal  = 0.05 < abs(deviation) <= 0.10
+    supporting_ev  = n_reasons >= 2 and n_warnings <= 1
+
+    if strong_signal and supporting_ev:
+        level = "🟢 HIGH"
+        desc  = "Strong model signal with supporting evidence — best value at 2.30+ odds"
+    elif strong_signal or (medium_signal and supporting_ev):
+        level = "🟡 MEDIUM"
+        desc  = "Moderate signal — look for 2.30+ odds for best ROI"
+    else:
+        level = "🔴 LOW"
+        desc  = "Weak FT5 signal — near baseline (53% blue), only bet with strong odds edge"
+        if not warnings:
+            warnings.append("Model near always-blue baseline — limited predictive value")
+
+    return level, desc, reasons, warnings
+
+
 @st.cache_resource
 def load_models():
     with open('model_payload.pkl', 'rb') as f:
@@ -135,8 +315,9 @@ ft5_model        = p['ft5_model']
 ft5_mlb          = p['ft5_mlb']
 champ_aggression = p['champ_aggression']
 team_early_rate  = p['team_early_rate']
-team_kill_speed  = p['team_kill_speed']
-KILL_SPEED_DEFAULT = p.get('kill_speed_default', 22.0)  # league mean, not 10.0
+team_kill_speed      = p['team_kill_speed']
+team_avg_gamelength  = p.get('team_avg_gamelength', {})
+team_avg_kills       = p.get('team_avg_kills', {})
 ft5_h2h          = p['ft5_h2h']
 ft5_team_recent  = p['ft5_team_recent']
 ft5_team_games   = p['ft5_team_games']
@@ -148,47 +329,6 @@ RC_WEIGHT        = p.get('rc_weight', 0.90)
 H2H_CAP          = p.get('h2h_cap',  0.60)
 gold_lookup      = p.get('gold_lookup', {})
 GOLD_WINDOW      = p.get('gold_window', 15)
-
-# V8.1 NEW: patch features
-patch_release    = p.get('patch_release', {})  # str patch -> ISO date string
-patch_champ      = p.get('patch_champ', {})    # (patch, champ) -> [wins, games]
-champ_recent_pkl = p.get('champ_recent', {})   # champ -> [(iso_date, win), ...]
-PATCH_WINDOW_DAYS = p.get('patch_window_days', 30)
-# Convert ISO strings back to datetimes for runtime use
-patch_release_dt = {k: datetime.fromisoformat(v) for k, v in patch_release.items()} if patch_release else {}
-champ_recent     = {c: [(datetime.fromisoformat(d), w) for d, w in lst]
-                    for c, lst in champ_recent_pkl.items()} if champ_recent_pkl else {}
-
-# V8.1 NEW: isotonic calibrators (FT5 only by default — win-model raw was better in backtest)
-win_calibrator   = p.get('win_calibrator', None)
-ft5_calibrator   = p.get('ft5_calibrator', None)
-APPLY_WIN_CALIB  = p.get('apply_win_calib', False)
-APPLY_FT5_CALIB  = p.get('apply_ft5_calib', True)
-
-# V8.2 NEW: kills predictor models and lookups
-kls_point       = p.get('kls_point', None)
-kls_q10         = p.get('kls_q10', None)
-kls_q50         = p.get('kls_q50', None)
-kls_q90         = p.get('kls_q90', None)
-kls_ou_models   = p.get('kls_ou_models', {})  # {line: classifier}
-kls_feat_cols   = p.get('kls_feat_cols', [])
-champ_dur_score   = p.get('champ_dur_score', {})
-champ_kills_score = p.get('champ_kills_score', {})
-kls_global_dur   = p.get('kls_global_dur', 32.0)
-kls_global_kills = p.get('kls_global_kills', 27.0)
-kls_team_dur_hist   = p.get('kls_team_dur_hist', {})
-kls_team_kills_hist = p.get('kls_team_kills_hist', {})
-kls_team_ckpm_hist  = p.get('kls_team_ckpm_hist', {})
-kls_h2h_dur   = p.get('kls_h2h_dur', {})
-kls_h2h_kills = p.get('kls_h2h_kills', {})
-kls_patch_dur   = p.get('kls_patch_dur', {})
-kls_patch_kills = p.get('kls_patch_kills', {})
-KLS_RECENT_WINDOW = p.get('kls_recent_window', 20)
-KLS_LINES         = p.get('kls_lines', [22.5, 24.5, 26.5, 28.5, 30.5])
-dur_point = p.get('dur_point', None)
-dur_q10   = p.get('dur_q10', None)
-dur_q50   = p.get('dur_q50', None)
-dur_q90   = p.get('dur_q90', None)
 
 POSITIONS  = ['top', 'jng', 'mid', 'adc', 'sup']
 POS_LABELS = ['Top', 'Jng', 'Mid', 'ADC', 'Sup']
@@ -237,7 +377,7 @@ def parse_champion_input(text):
         i += 1
     return champs
 
-st.success("Models ready!")
+st.markdown('<span style="color:#3a6a20;font-size:0.75rem;">&#9654; MODELS LOADED</span>', unsafe_allow_html=True)
 
 defaults = {
     'blue_team_input': '', 'red_team_input': '',
@@ -247,7 +387,6 @@ defaults = {
     'red_p_top':  '', 'red_p_jg':  '', 'red_p_mid':  '',
     'red_p_adc':  '', 'red_p_sup':  '',
     'game_number': '',
-    'current_patch': '',
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -300,39 +439,6 @@ def get_gold_features(team_name, match_date=None):
             return entry.get('avg_gd20', 0.0), entry.get('late_scaling', 0.0)
     return 0.0, 0.0
 
-# V8.1 NEW: patch feature helpers
-def get_champ_patch_winrate(champ, patch, ref_date=None):
-    """Champion winrate on current patch if >=5 games, else 30-day rolling, else 0.5.
-    Gracefully handles brand-new patches with no data."""
-    from datetime import datetime, timedelta
-    if ref_date is None: ref_date = datetime.now()
-    elif isinstance(ref_date, str): ref_date = datetime.strptime(ref_date[:10], '%Y-%m-%d')
-    w_g = patch_champ.get((patch, champ))
-    if w_g and w_g[1] >= 5:
-        return w_g[0] / w_g[1]
-    cutoff = ref_date - timedelta(days=PATCH_WINDOW_DAYS)
-    recent = [w for d, w in champ_recent.get(champ, []) if d >= cutoff]
-    if len(recent) >= 5:
-        return sum(recent) / len(recent)
-    return 0.5
-
-def get_patch_age_days(patch, ref_date=None):
-    """Days since this patch first appeared. 0 if brand new (unseen)."""
-    from datetime import datetime
-    if ref_date is None: ref_date = datetime.now()
-    elif isinstance(ref_date, str): ref_date = datetime.strptime(ref_date[:10], '%Y-%m-%d')
-    release = patch_release_dt.get(patch)
-    if release is None: return 0
-    return max(0, (ref_date - release).days)
-
-def get_team_patch_features(picks, patch, ref_date=None):
-    """Returns (avg_patch_wr, patch_age_days, is_new_patch) for a 5-champ team."""
-    if not picks or not patch:
-        return 0.5, 0, 0
-    wrs = [get_champ_patch_winrate(c, patch, ref_date) for c in picks]
-    age = get_patch_age_days(patch, ref_date)
-    return (sum(wrs)/len(wrs), age, 1 if age < 7 else 0)
-
 def odds_label(odds):
     if odds < 1.60:    return "⚠️ Low odds"
     elif odds >= 2.30: return "🔥 Great odds"
@@ -346,91 +452,6 @@ def calc_edge(conf, odds):
     elif edge < 0.18: units, label = 2, "✅ STRONG"
     else:             units, label = 3, "🔥 VERY STRONG"
     return edge, units, label, implied
-
-# V8.2 NEW: kills feature builder (mirrors kills model training)
-def _rmean(h, w, d): return sum(h[-w:])/len(h[-w:]) if h else d
-def _rstd(h, w, d):  return float(np.std(h[-w:])) if len(h) >= 3 else d
-
-def build_kills_features(blue, red, blue_picks, red_picks, patch, league):
-    """Build a feature row matching kls_feat_cols. Returns DataFrame with 1 row."""
-    gdm = kls_global_dur; gkm = kls_global_kills
-    b_dur_h = kls_team_dur_hist.get(blue, [])
-    r_dur_h = kls_team_dur_hist.get(red, [])
-    b_kls_h = kls_team_kills_hist.get(blue, [])
-    r_kls_h = kls_team_kills_hist.get(red, [])
-    b_ck_h  = kls_team_ckpm_hist.get(blue, [])
-    r_ck_h  = kls_team_ckpm_hist.get(red, [])
-
-    b_dur  = _rmean(b_dur_h, KLS_RECENT_WINDOW, gdm)
-    r_dur  = _rmean(r_dur_h, KLS_RECENT_WINDOW, gdm)
-    b_kls  = _rmean(b_kls_h, KLS_RECENT_WINDOW, gkm)
-    r_kls  = _rmean(r_kls_h, KLS_RECENT_WINDOW, gkm)
-    b_ckpm = _rmean(b_ck_h, KLS_RECENT_WINDOW, gkm/gdm)
-    r_ckpm = _rmean(r_ck_h, KLS_RECENT_WINDOW, gkm/gdm)
-    b_dur_s = _rstd(b_dur_h, KLS_RECENT_WINDOW, 5.0)
-    r_dur_s = _rstd(r_dur_h, KLS_RECENT_WINDOW, 5.0)
-    b_kls_s = _rstd(b_kls_h, KLS_RECENT_WINDOW, 8.0)
-    r_kls_s = _rstd(r_kls_h, KLS_RECENT_WINDOW, 8.0)
-
-    mk = tuple(sorted([blue or "", red or ""]))
-    hd = kls_h2h_dur.get(mk, [])
-    hk = kls_h2h_kills.get(mk, [])
-    h_dur = _rmean(hd, 10, (b_dur+r_dur)/2)
-    h_kls = _rmean(hk, 10, (b_kls+r_kls)/2)
-
-    b_ad = np.mean([champ_dur_score.get(c, gdm) for c in blue_picks]) if blue_picks else gdm
-    b_ak = np.mean([champ_kills_score.get(c, gkm) for c in blue_picks]) if blue_picks else gkm
-    r_ad = np.mean([champ_dur_score.get(c, gdm) for c in red_picks]) if red_picks else gdm
-    r_ak = np.mean([champ_kills_score.get(c, gkm) for c in red_picks]) if red_picks else gkm
-
-    p_dur = kls_patch_dur.get(patch, gdm)
-    p_kls = kls_patch_kills.get(patch, gkm)
-    from datetime import datetime
-    rd = patch_release_dt.get(patch) if patch_release_dt else None
-    p_age = 0 if rd is None else max(0, (datetime.now() - rd).days)
-
-    feat = {
-        'b_dur_mean':b_dur, 'r_dur_mean':r_dur, 'avg_dur_mean':(b_dur+r_dur)/2,
-        'b_kills_mean':b_kls, 'r_kills_mean':r_kls, 'avg_kills_mean':(b_kls+r_kls)/2,
-        'b_ckpm_mean':b_ckpm, 'r_ckpm_mean':r_ckpm, 'avg_ckpm_mean':(b_ckpm+r_ckpm)/2,
-        'b_dur_std':b_dur_s, 'r_dur_std':r_dur_s,
-        'b_kills_std':b_kls_s, 'r_kills_std':r_kls_s,
-        'min_games_seen': min(len(b_dur_h), len(r_dur_h)),
-        'h2h_dur_mean':h_dur, 'h2h_kills_mean':h_kls, 'h2h_n':len(hd),
-        'b_arch_dur':b_ad, 'r_arch_dur':r_ad, 'avg_arch_dur':(b_ad+r_ad)/2,
-        'b_arch_kills':b_ak, 'r_arch_kills':r_ak, 'avg_arch_kills':(b_ak+r_ak)/2,
-        'patch_dur':p_dur, 'patch_kills':p_kls,
-        'patch_age_days':p_age, 'is_new_patch': 1 if p_age < 7 else 0,
-        'league_idx': hash(league) % 1000,
-    }
-    return pd.DataFrame([feat])[kls_feat_cols]
-
-def predict_kills_ou(X_row, target_line):
-    """Predict probability that total kills exceeds target_line.
-    Picks the closest trained O/U classifier (we trained at 22.5/24.5/26.5/28.5/30.5)
-    and adjusts slightly toward the quantile estimate for off-line targets.
-    """
-    if not kls_ou_models:
-        return None
-    available_lines = sorted(kls_ou_models.keys())
-    closest = min(available_lines, key=lambda x: abs(x - target_line))
-    model = kls_ou_models[closest]
-    prob_over_closest = float(model.predict_proba(X_row)[0, 1])
-
-    # If user's line is far from any trained line, blend with point prediction
-    # to handle the offset (e.g. line=27.0 between 26.5 and 28.5)
-    if abs(target_line - closest) <= 0.5:
-        return prob_over_closest, closest
-    # For larger gaps, use the q50 + assumption of approx normal residuals
-    if kls_q50 is not None:
-        median = float(kls_q50.predict(X_row)[0])
-        # Crude blend: shift the closest-line probability based on how target compares to median
-        offset = (target_line - closest) * 0.05  # ~5pp per kill of line shift, empirically reasonable
-        if target_line > closest:
-            return max(0.05, prob_over_closest - offset), closest
-        else:
-            return min(0.95, prob_over_closest + offset), closest
-    return prob_over_closest, closest
 
 def show_signal(label, b_val, r_val, low_t, high_t, blue_name, red_name, fmt=".1f"):
     diff     = b_val - r_val
@@ -486,7 +507,7 @@ def get_draft_only_prediction(blue, red, b_champ_wr, r_champ_wr, b_pc_avg, r_pc_
     r_agg = sum(champ_aggression.get(c, 0.5) for c in red)  / len(red)
     neutral_ft5 = pd.DataFrame([[
         b_agg, r_agg, b_agg-r_agg,
-        0.5, 0.5, 0.0, KILL_SPEED_DEFAULT, KILL_SPEED_DEFAULT, 0.0,
+        0.5, 0.5, 0.0, 10.0, 10.0, 0.0,
         0.5, 0.5, 0.5, 0.0,
     ]], columns=[
         'blue_aggression','red_aggression','aggression_diff',
@@ -758,12 +779,23 @@ with btn_col2:
                 st.session_state[f'red_p_{pos}'], st.session_state[f'blue_p_{pos}']
         st.rerun()
 
+# ── add CSS to shrink input height and tighten spacing ──
+st.markdown("""
+<style>
+  .stTextInput > div > div > input { padding: 4px 8px !important; min-height: 0 !important; height: 30px !important; }
+  .stTextArea > div > div > textarea { padding: 4px 8px !important; }
+  .stNumberInput > div > div > input { padding: 4px 6px !important; height: 30px !important; }
+  div[data-testid="stVerticalBlock"] > div { gap: 0.25rem !important; }
+  .stNumberInput button { height: 30px !important; }
+</style>
+""", unsafe_allow_html=True)
+
 col1, col2 = st.columns(2)
 
 with col1:
-    st.markdown("### 🔵 Blue Side")
+    st.markdown('<div style="color:#4a90d9;font-size:11px;font-weight:700;font-family:monospace;letter-spacing:0.08em;margin-bottom:4px;">🔵 BLUE SIDE</div>', unsafe_allow_html=True)
     blue_team_raw   = st.text_input("Team name", key='blue_team_input',
-                                     placeholder="e.g. T1, Gen.G, Cloud9...")
+                                     placeholder="e.g. T1, Gen.G, Cloud9...", label_visibility="collapsed")
     blue_team_match = fuzzy_match_team(blue_team_raw) if blue_team_raw else None
     if blue_team_match and blue_team_match in team_lineups:
         lineup = team_lineups[blue_team_match]
@@ -774,32 +806,35 @@ with col1:
             if not st.session_state['blue_p_adc']: st.session_state['blue_p_adc'] = lineup.get('adc','')
             if not st.session_state['blue_p_sup']: st.session_state['blue_p_sup'] = lineup.get('sup','')
     if blue_team_raw and blue_team_match:
-        st.caption(f"✅ Matched: {blue_team_match}")
-    elif blue_team_raw and not blue_team_match:
-        st.caption("⚪ Unknown team — using average stats")
+        st.markdown(f'<div style="color:#3a6a20;font-size:10px;font-family:monospace;margin:-2px 0 2px;">✓ {blue_team_match}</div>', unsafe_allow_html=True)
+    elif blue_team_raw:
+        st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;margin:-2px 0 2px;">⚪ unknown — using averages</div>', unsafe_allow_html=True)
 
-    blue_comp_raw = st.text_area("Champion comp (Top Jng Mid ADC Sup)",
-                                  key='blue_comp_input',
+    blue_comp_raw = st.text_area("Champions", key='blue_comp_input',
                                   placeholder="e.g. Gnar Nocturne Ahri Caitlyn Bard",
-                                  height=80)
+                                  height=58, label_visibility="collapsed")
     blue_parsed = parse_champion_input(blue_comp_raw)
     if blue_comp_raw:
         if len(blue_parsed) == 5:
-            st.caption(f"✅ {' | '.join([f'{POS_LABELS[i]}: {blue_parsed[i]}' for i in range(5)])}")
+            st.markdown(f'<div style="color:#3a6a20;font-size:10px;font-family:monospace;margin:-2px 0 2px;">✓ {' · '.join([f'{POS_LABELS[i]}: {blue_parsed[i]}' for i in range(5)])}</div>', unsafe_allow_html=True)
         else:
-            st.caption(f"⚠️ Parsed {len(blue_parsed)}/5 — {', '.join(blue_parsed) if blue_parsed else 'none recognized'}")
+            st.markdown(f'<div style="color:#8a6020;font-size:10px;font-family:monospace;margin:-2px 0 2px;">⚠ {len(blue_parsed)}/5 parsed</div>', unsafe_allow_html=True)
 
-    st.markdown("**Players (optional)**")
-    blue_p_top = st.text_input("Top",     key='blue_p_top')
-    blue_p_jg  = st.text_input("Jungle",  key='blue_p_jg')
-    blue_p_mid = st.text_input("Mid",     key='blue_p_mid')
-    blue_p_adc = st.text_input("ADC",     key='blue_p_adc')
-    blue_p_sup = st.text_input("Support", key='blue_p_sup')
+    st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin:4px 0 2px;">PLAYERS (optional)</div>', unsafe_allow_html=True)
+    pb1, pb2, pb3 = st.columns(3)
+    with pb1:
+        blue_p_top = st.text_input("Top", key='blue_p_top', placeholder="Top")
+        blue_p_adc = st.text_input("ADC", key='blue_p_adc', placeholder="ADC")
+    with pb2:
+        blue_p_jg  = st.text_input("Jng", key='blue_p_jg',  placeholder="Jng")
+        blue_p_sup = st.text_input("Sup", key='blue_p_sup', placeholder="Sup")
+    with pb3:
+        blue_p_mid = st.text_input("Mid", key='blue_p_mid', placeholder="Mid")
 
 with col2:
-    st.markdown("### 🔴 Red Side")
+    st.markdown('<div style="color:#e05454;font-size:11px;font-weight:700;font-family:monospace;letter-spacing:0.08em;margin-bottom:4px;">🔴 RED SIDE</div>', unsafe_allow_html=True)
     red_team_raw   = st.text_input("Team name", key='red_team_input',
-                                    placeholder="e.g. T1, Gen.G, Cloud9...")
+                                    placeholder="e.g. T1, Gen.G, Cloud9...", label_visibility="collapsed")
     red_team_match = fuzzy_match_team(red_team_raw) if red_team_raw else None
     if red_team_match and red_team_match in team_lineups:
         lineup = team_lineups[red_team_match]
@@ -810,75 +845,56 @@ with col2:
             if not st.session_state['red_p_adc']: st.session_state['red_p_adc'] = lineup.get('adc','')
             if not st.session_state['red_p_sup']: st.session_state['red_p_sup'] = lineup.get('sup','')
     if red_team_raw and red_team_match:
-        st.caption(f"✅ Matched: {red_team_match}")
-    elif red_team_raw and not red_team_match:
-        st.caption("⚪ Unknown team — using average stats")
+        st.markdown(f'<div style="color:#3a6a20;font-size:10px;font-family:monospace;margin:-2px 0 2px;">✓ {red_team_match}</div>', unsafe_allow_html=True)
+    elif red_team_raw:
+        st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;margin:-2px 0 2px;">⚪ unknown — using averages</div>', unsafe_allow_html=True)
 
-    red_comp_raw = st.text_area("Champion comp (Top Jng Mid ADC Sup)",
-                                 key='red_comp_input',
+    red_comp_raw = st.text_area("Champions", key='red_comp_input',
                                  placeholder="e.g. Ambessa Pantheon Aurora Jhin Neeko",
-                                 height=80)
+                                 height=58, label_visibility="collapsed")
     red_parsed = parse_champion_input(red_comp_raw)
     if red_comp_raw:
         if len(red_parsed) == 5:
-            st.caption(f"✅ {' | '.join([f'{POS_LABELS[i]}: {red_parsed[i]}' for i in range(5)])}")
+            st.markdown(f'<div style="color:#3a6a20;font-size:10px;font-family:monospace;margin:-2px 0 2px;">✓ {' · '.join([f'{POS_LABELS[i]}: {red_parsed[i]}' for i in range(5)])}</div>', unsafe_allow_html=True)
         else:
-            st.caption(f"⚠️ Parsed {len(red_parsed)}/5 — {', '.join(red_parsed) if red_parsed else 'none recognized'}")
+            st.markdown(f'<div style="color:#8a6020;font-size:10px;font-family:monospace;margin:-2px 0 2px;">⚠ {len(red_parsed)}/5 parsed</div>', unsafe_allow_html=True)
 
-    st.markdown("**Players (optional)**")
-    red_p_top = st.text_input("Top",     key='red_p_top')
-    red_p_jg  = st.text_input("Jungle",  key='red_p_jg')
-    red_p_mid = st.text_input("Mid",     key='red_p_mid')
-    red_p_adc = st.text_input("ADC",     key='red_p_adc')
-    red_p_sup = st.text_input("Support", key='red_p_sup')
+    st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin:4px 0 2px;">PLAYERS (optional)</div>', unsafe_allow_html=True)
+    pr1, pr2, pr3 = st.columns(3)
+    with pr1:
+        red_p_top = st.text_input("Top", key='red_p_top', placeholder="Top")
+        red_p_adc = st.text_input("ADC", key='red_p_adc', placeholder="ADC")
+    with pr2:
+        red_p_jg  = st.text_input("Jng", key='red_p_jg',  placeholder="Jng")
+        red_p_sup = st.text_input("Sup", key='red_p_sup', placeholder="Sup")
+    with pr3:
+        red_p_mid = st.text_input("Mid", key='red_p_mid', placeholder="Mid")
 
-gc1, gc2, gc3 = st.columns([1, 2, 2])
+# ── odds + game # row ──
+gc1, gc2, gc3, gc4 = st.columns([1, 1, 1, 1])
 with gc1:
     game_number = st.text_input("Game #", key='game_number', placeholder="1, 2, 3...")
-    # V8.1 NEW: patch input — auto-fills latest known patch, can be overridden for new ones
-    latest_patch = max(patch_release_dt.keys(), key=lambda p: patch_release_dt[p]) if patch_release_dt else ""
-    current_patch = st.text_input("Patch", key='current_patch',
-                                   value=latest_patch, placeholder="e.g. 26.05",
-                                   help="Defaults to latest known patch. Override for new patches; "
-                                        "model falls back to 30-day rolling winrate if patch is unknown.")
 with gc2:
-    st.markdown("**Match Winner**")
-    win_blue_odds = st.number_input("Blue odds", min_value=1.01, max_value=10.0,
-                                     value=1.85, step=0.05, key="wbo")
-    win_red_odds  = st.number_input("Red odds",  min_value=1.01, max_value=10.0,
-                                     value=1.95, step=0.05, key="wro")
+    st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin-bottom:2px;">WIN ODDS</div>', unsafe_allow_html=True)
+    wo1, wo2 = st.columns(2)
+    with wo1:
+        win_blue_odds = st.number_input("Blue", min_value=1.01, max_value=10.0, value=1.85, step=0.05, key="wbo")
+    with wo2:
+        win_red_odds  = st.number_input("Red",  min_value=1.01, max_value=10.0, value=1.95, step=0.05, key="wro")
 with gc3:
-    st.markdown("**First to Five**")
-    ft5_blue_odds = st.number_input("Blue odds", min_value=1.01, max_value=10.0,
-                                     value=1.85, step=0.05, key="fbo")
-    ft5_red_odds  = st.number_input("Red odds",  min_value=1.01, max_value=10.0,
-                                     value=1.95, step=0.05, key="fro")
+    st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin-bottom:2px;">FT5 ODDS</div>', unsafe_allow_html=True)
+    fo1, fo2 = st.columns(2)
+    with fo1:
+        ft5_blue_odds = st.number_input("Blue", min_value=1.01, max_value=10.0, value=1.85, step=0.05, key="fbo")
+    with fo2:
+        ft5_red_odds  = st.number_input("Red",  min_value=1.01, max_value=10.0, value=1.95, step=0.05, key="fro")
+with gc4:
+    st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin-bottom:2px;">LOG TO</div>', unsafe_allow_html=True)
+    send_discord   = st.checkbox("Discord",      value=True)
+    send_ft5_sheet = st.checkbox("FT5 Sheet",    value=True)
+    send_win_sheet = st.checkbox("Win Sheet",    value=True)
 
-# V8.2 NEW: Kills O/U input row
-st.markdown("**💀 Total Kills Over/Under** *(optional — leave blank to skip)*")
-kc1, kc2, kc3 = st.columns([1, 1, 1])
-with kc1:
-    kills_line = st.number_input("Kill line", min_value=15.0, max_value=45.0,
-                                  value=26.5, step=0.5, key="kls_line",
-                                  help="The over/under line offered by the book (e.g. 26.5)")
-with kc2:
-    kills_over_odds = st.number_input("Over odds", min_value=1.01, max_value=10.0,
-                                       value=1.90, step=0.05, key="klo")
-with kc3:
-    kills_under_odds = st.number_input("Under odds", min_value=1.01, max_value=10.0,
-                                        value=1.90, step=0.05, key="klu")
-
-chk1, chk2, chk3, chk4 = st.columns(4)
-with chk1:
-    send_discord   = st.checkbox("📨 Discord",      value=True)
-with chk2:
-    send_ft5_sheet = st.checkbox("📊 FT5 Sheet",    value=True)
-with chk3:
-    send_win_sheet = st.checkbox("🏆 Winner Sheet", value=True)
-with chk4:
-    st.empty()
-
-predict_btn = st.button("🔮 Predict", type="primary", use_container_width=True)
+predict_btn = st.button("◈  PREDICT", type="primary", use_container_width=True)
 
 # =================================================================
 # PREDICTION
@@ -968,11 +984,6 @@ if predict_btn:
             'blue_late_scaling','red_late_scaling','late_scaling_diff',
         ])
         win_prob_raw  = win_model.predict_proba(pd.concat([b_win_enc,r_win_enc,win_extra],axis=1))[0]
-        # V8.1: optional isotonic calibration (off by default for win model — backtest showed raw is better)
-        if APPLY_WIN_CALIB and win_calibrator is not None:
-            blue_raw = win_prob_raw[1]
-            blue_cal = float(win_calibrator.predict([blue_raw])[0])
-            win_prob_raw = [1 - blue_cal, blue_cal]
         # Clip to 5%-95% — prevents 100% confidence outputs
         blue_win_conf = min(max(win_prob_raw[1], 0.05), 0.95)
         red_win_conf  = min(max(win_prob_raw[0], 0.05), 0.95)
@@ -994,8 +1005,8 @@ if predict_btn:
         r_agg        = sum(champ_aggression.get(c,0.5) for c in red) /len(red)  if red  else 0.5
         b_early      = team_early_rate.get(blue_team_norm,0.5)  if blue_team_norm else 0.5
         r_early      = team_early_rate.get(red_team_norm, 0.5)  if red_team_norm  else 0.5
-        b_speed      = team_kill_speed.get(blue_team_norm, KILL_SPEED_DEFAULT) if blue_team_norm else KILL_SPEED_DEFAULT
-        r_speed      = team_kill_speed.get(red_team_norm,  KILL_SPEED_DEFAULT) if red_team_norm  else KILL_SPEED_DEFAULT
+        b_speed      = team_kill_speed.get(blue_team_norm,10.0) if blue_team_norm else 10.0
+        r_speed      = team_kill_speed.get(red_team_norm, 10.0) if red_team_norm  else 10.0
         ft5_h2h_r    = get_h2h_rate(ft5_h2h, blue_team_norm, red_team_norm) \
                        if blue_team_norm and red_team_norm else 0.5
         ft5_h2h_tot  = get_h2h_total(ft5_h2h, blue_team_norm, red_team_norm) \
@@ -1017,11 +1028,6 @@ if predict_btn:
             'h2h_early_rate','blue_early_form','red_early_form','early_form_diff',
         ])
         ft5_prob_raw  = ft5_model.predict_proba(pd.concat([b_ft5_enc,r_ft5_enc,ft5_extra],axis=1))[0]
-        # V8.1: optional isotonic calibration (on by default for FT5 — small improvement on 50-60% bands)
-        if APPLY_FT5_CALIB and ft5_calibrator is not None:
-            blue_raw = ft5_prob_raw[1]
-            blue_cal = float(ft5_calibrator.predict([blue_raw])[0])
-            ft5_prob_raw = [1 - blue_cal, blue_cal]
         # Clip to 5%-95%
         blue_ft5_conf = min(max(ft5_prob_raw[1], 0.05), 0.95)
         red_ft5_conf  = min(max(ft5_prob_raw[0], 0.05), 0.95)
@@ -1049,10 +1055,13 @@ if predict_btn:
 
         win_conf_level, win_conf_desc, win_reasons, win_warnings = model_confidence(
             b_games, r_games, h2h_total, b_form-r_form, b_wr-r_wr, b_champ_wr-r_champ_wr)
-        ft5_conf_level, ft5_conf_desc, ft5_reasons, ft5_warnings = model_confidence(
-            ft5_team_games.get(blue_team_norm,0) if blue_team_norm else 0,
-            ft5_team_games.get(red_team_norm, 0) if red_team_norm  else 0,
-            ft5_h2h_tot, b_early_form-r_early_form, b_early-r_early, b_agg-r_agg)
+        ft5_conf_level, ft5_conf_desc, ft5_reasons, ft5_warnings = ft5_confidence(
+            blue_ft5_conf,
+            b_early, r_early,
+            b_speed, r_speed,
+            b_agg,   r_agg,
+            ft5_h2h_tot,
+            b_early_form, r_early_form)
 
         win_caution = 0.60 <= max(blue_win_conf, red_win_conf) < 0.65
         ft5_caution = 0.60 <= max(blue_ft5_conf, red_ft5_conf) < 0.65
@@ -1122,85 +1131,326 @@ if predict_btn:
 
         discord_sent = send_discord_dm(discord_msg) if send_discord else None
 
-        st.divider()
+        # ── helper: conf level text + pill color ──
+        def conf_display(level):
+            if 'HIGH'   in level: return ('HIGH',   '#0a1f05', '#80d040', '#2a5010')
+            if 'MEDIUM' in level: return ('MEDIUM', '#1f1a05', '#d0a040', '#5a4010')
+            return                        ('LOW',    '#1a0505', '#f06060', '#5a1010')
 
-        match_title = f"### {blue_team_name} vs {red_team_name}"
-        if game_label: match_title += f" — {game_label}"
-        st.markdown(match_title)
+        def agg_tag(agg_score):
+            if agg_score >= 0.58: return ('high', '#c0f060')
+            if agg_score >= 0.48: return ('avg',  '#8090b0')
+            return                       ('low',  '#60a0f0')
 
-        with st.expander("📋 Team Stats", expanded=False):
-            sc1, sc2 = st.columns(2)
-            with sc1:
-                st.markdown(f"**🔵 {blue_team_name}**")
-                st.write(f"Win rate: {b_wr*100:.1f}%")
-                st.write(f"Form (L5): {b_form*100:.0f}%")
-                st.write(f"Early rate: {b_early*100:.1f}%")
-                st.write(f"Avg kill time: {b_speed:.1f}m")
-            with sc2:
-                st.markdown(f"**🔴 {red_team_name}**")
-                st.write(f"Win rate: {r_wr*100:.1f}%")
-                st.write(f"Form (L5): {r_form*100:.0f}%")
-                st.write(f"Early rate: {r_early*100:.1f}%")
-                st.write(f"Avg kill time: {r_speed:.1f}m")
-            hc1, hc2 = st.columns(2)
-            with hc1:
-                st.write(f"Win H2H: {blue_team_name} {b_win_h2h}–{r_win_h2h} {red_team_name}")
-            with hc2:
-                st.write(f"Early H2H: {blue_team_name} {b_ft5_h2h}–{r_ft5_h2h} {red_team_name}")
+        def fmt_gl(seconds):
+            if not seconds or seconds == 0: return 'N/A'
+            m = int(seconds // 60); s = int(seconds % 60)
+            return f"{m}:{s:02d}"
 
-        st.markdown("### 🏆 Match Winner")
-        winner_color = "🔵" if blue_win_conf > red_win_conf else "🔴"
-        st.markdown(f"#### {winner_color} Model pick: **{win_winner}**")
-        wc1, wc2 = st.columns(2)
-        with wc1:
-            st.metric(f"🔵 {blue_team_name}", f"{blue_win_conf*100:.1f}%",
-                      delta=f"Edge: {win_blue_edge*100:.1f}%")
-            st.write(f"Odds: {win_blue_odds} | Implied: {win_blue_impl*100:.1f}%")
-            st.write(odds_label(win_blue_odds))
-            if blue_win_conf > red_win_conf:
-                st.info(f"💰 {win_blue_units}u — {win_blue_label}" if win_blue_units > 0 else "💰 ⛔ SKIP")
-        with wc2:
-            st.metric(f"🔴 {red_team_name}", f"{red_win_conf*100:.1f}%",
-                      delta=f"Edge: {win_red_edge*100:.1f}%")
-            st.write(f"Odds: {win_red_odds} | Implied: {win_red_impl*100:.1f}%")
-            st.write(odds_label(win_red_odds))
-            if red_win_conf > blue_win_conf:
-                st.info(f"💰 {win_red_units}u — {win_red_label}" if win_red_units > 0 else "💰 ⛔ SKIP")
+        # ── game style data ──
+        b_avg_gl = team_avg_gamelength.get(blue_team_norm, 0)
+        r_avg_gl = team_avg_gamelength.get(red_team_norm, 0)
+        b_avg_k  = team_avg_kills.get(blue_team_norm, 0)
+        r_avg_k  = team_avg_kills.get(red_team_norm, 0)
+        total_kills_est = (b_avg_k + r_avg_k) if (b_avg_k > 0 and r_avg_k > 0) else 0
 
-        if bdw is not None:
-            dw = "🔵" if bdw > rdw else "🔴"
-            dn = blue_team_name if bdw > rdw else red_team_name
-            st.caption(f"⚖️ Draft-only: 🔵 {bdw*100:.1f}% vs 🔴 {rdw*100:.1f}% — {dw} {dn} has better draft")
+        # ── confidence display values ──
+        win_conf_txt, win_bg, win_fg, win_br = conf_display(win_conf_level)
+        ft5_conf_txt, ft5_bg, ft5_fg, ft5_br = conf_display(ft5_conf_level)
 
-        st.markdown(f"**📊 Confidence: {win_conf_level}** — {win_conf_desc}")
+        # ── edge strings ──
+        win_edge_pct  = max(win_blue_edge, win_red_edge) * 100
+        ft5_edge_pct  = max(ft5_blue_edge, ft5_red_edge) * 100
+        win_pick_edge = win_blue_edge if blue_win_conf > red_win_conf else win_red_edge
+        ft5_pick_edge = ft5_blue_edge if blue_ft5_conf > red_ft5_conf else ft5_red_edge
 
-        with st.spinner("Fetching your tracker history..."):
-            win_history = fetch_tracker_history(
-                win_pick_conf, win_conf_level,
-                st.secrets["GOOGLE_WINNER_SHEETS_ID"])
-        if win_history:
-            with st.expander("📈 Your Tracker History (Winner)", expanded=True):
-                st.markdown(format_history(win_history, "Winner"))
+        # ── pick recommendation strings ──
+        if win_pick_units > 0:
+            win_rec_str = f"{win_winner} WIN &middot; {win_pick_units}u {win_pick_label.replace('✅ ','').replace('🔥 ','')} &middot; @{win_pick_odds}"
+            win_pick_show = True
+        else:
+            win_rec_str = f"{win_winner} WIN &middot; SKIP (edge only {win_pick_edge*100:.1f}%)"
+            win_pick_show = False
 
-        for r in win_reasons: st.write(f"✔ {r}")
-        for w in win_warnings:
-            if "Mixed signals" in w:
-                wr_dir    = f"🔵 {blue_team_name}" if b_wr > r_wr else f"🔴 {red_team_name}"
-                form_dir  = f"🔵 {blue_team_name}" if b_form > r_form else f"🔴 {red_team_name}"
-                champ_dir = f"🔵 {blue_team_name}" if b_champ_wr > r_champ_wr else f"🔴 {red_team_name}"
-                st.write(f"⚠️ Mixed signals — win rate favours {wr_dir} ({abs(b_wr-r_wr)*100:.1f}%), "
-                         f"form favours {form_dir} ({abs(b_form-r_form)*100:.0f}%), "
-                         f"champ quality favours {champ_dir} ({abs(b_champ_wr-r_champ_wr)*100:.1f}%)")
-            elif "Weak signal" in w:
-                st.write(f"⚠️ Weak signals — win rate diff: {abs(b_wr-r_wr)*100:.1f}%, "
-                         f"form diff: {abs(b_form-r_form)*100:.0f}%, "
-                         f"champ diff: {abs(b_champ_wr-r_champ_wr)*100:.1f}%")
-            else:
-                st.write(f"⚠️ {w}")
+        if ft5_pick_units > 0:
+            ft5_rec_str = f"{ft5_winner} FT5 &middot; {ft5_pick_units}u {ft5_pick_label.replace('✅ ','').replace('🔥 ','')} &middot; @{ft5_pick_odds} &middot; est ~{est_time:.1f} min"
+            ft5_pick_show = True
+        else:
+            ft5_rec_str = f"{ft5_winner} FT5 &middot; SKIP (edge only {ft5_pick_edge*100:.1f}%)"
+            ft5_pick_show = False
+
+        win_pick_color  = '#c0f060' if win_pick_show  else '#4a5a7a'
+        win_pick_bg     = '#0d1f05' if win_pick_show  else '#0f1218'
+        win_pick_border = '#2a5a10' if win_pick_show  else '#1e2535'
+        ft5_pick_color  = '#60a0f0' if ft5_pick_show  else '#4a5a7a'
+        ft5_pick_bg     = '#05101f' if ft5_pick_show  else '#0f1218'
+        ft5_pick_border = '#103a6a' if ft5_pick_show  else '#1e2535'
+
+        # ── draft rows ──
+        def draft_rows_html(picks, players, prefix):
+            if not picks: return '<div style="color:#3a4060;font-size:10px;">No picks entered</div>'
+            rows = ''
+            pos_labels = ['TOP','JNG','MID','ADC','SUP']
+            for i, champ in enumerate(picks):
+                pos   = pos_labels[i] if i < len(pos_labels) else ''
+                agg   = champ_aggression.get(champ, 0.5)
+                tag, tagcol = agg_tag(agg)
+                player = players[i].strip() if i < len(players) and players[i].strip() else ''
+                player_html = f'<span style="color:#5a6a8a;font-size:9px;margin-left:4px;">({player})</span>' if player else ''
+                rows += (
+                    f'<div style="display:grid;grid-template-columns:28px 1fr auto;align-items:center;'
+                    f'gap:5px;padding:2px 0;">'
+                    f'<span style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.06em;">{pos}</span>'
+                    f'<span style="font-size:11px;color:#8090b0;">{champ}{player_html}</span>'
+                    f'<span style="font-size:9px;color:{tagcol};">{tag}</span>'
+                    f'</div>'
+                )
+            return rows
+
+        blue_draft_html = draft_rows_html(blue, blue_players, 'blue')
+        red_draft_html  = draft_rows_html(red,  red_players,  'red')
+
+        # ── league tip ──
+        league_detected = league_str if league_str else get_league(blue_team_norm or red_team_norm)
+        ft5_league_tips = {
+            'LCK':   'LCK FT5: Best model league — +6.9% edge. Red signal especially reliable (69% accuracy).',
+            'LPL':   'LPL FT5: Model not trained on LPL data — use as rough guide only.',
+            'LEC':   'LEC FT5: Weak edge (+3.1%). Only bet with strong red signal or 60%+ confidence.',
+            'LCS':   'LCS FT5: 0% model edge in backtest. Blue baseline (55%) is your main edge.',
+            'CBLOL': 'CBLOL FT5: Solid edge (+3.2%). Red signal reliable (63% accuracy). Blue baseline 54%.',
+        }
+        league_tip = ''
+        for lg_key, tip in ft5_league_tips.items():
+            if lg_key.lower() in (league_detected or '').lower():
+                league_tip = tip
+                break
+
+        # ── strong red signal ──
+        red_signal_html = ''
+        if ft5_strong_red:
+            red_signal_html = (
+                '<div style="background:#1a0505;border-left:2px solid #6a1010;padding:5px 8px;'
+                'border-radius:0 4px 4px 0;font-size:10px;color:#f06060;margin-bottom:8px;">'
+                f'STRONG RED SIGNAL — blue conf {blue_ft5_conf*100:.1f}% (below 48%). '
+                'Backtest: 61% red accuracy. Check odds offer value before betting.'
+                '</div>'
+            )
+
+        # ── caution banners ──
+        win_caution_html = ''
         if win_caution:
-            st.warning("60-65% range — backtest shows ~57% actual accuracy here, be cautious")
+            win_caution_html = (
+                '<div style="background:#1f1a05;border-left:2px solid #5a4010;padding:5px 8px;'
+                'border-radius:0 4px 4px 0;font-size:10px;color:#c0a040;margin-top:6px;">'
+                '60-65% range — backtest ~57% actual accuracy here, be cautious'
+                '</div>'
+            )
+        ft5_caution_html = ''
+        if ft5_caution:
+            ft5_caution_html = (
+                '<div style="background:#1f1a05;border-left:2px solid #5a4010;padding:5px 8px;'
+                'border-radius:0 4px 4px 0;font-size:10px;color:#c0a040;margin-top:6px;">'
+                '60-65% range — treat with extra caution'
+                '</div>'
+            )
 
-        with st.expander("📊 Win Signal Breakdown", expanded=False):
+        # ── draft only caption ──
+        draft_win_cap = ''
+        if bdw is not None:
+            dw_name = blue_team_name if bdw > rdw else red_team_name
+            draft_win_cap = f'<span style="color:#3a4060;font-size:10px;">Draft-only win: {blue_team_name} {bdw*100:.1f}% vs {red_team_name} {rdw*100:.1f}% &mdash; {dw_name} has better draft</span>'
+        draft_ft5_cap = ''
+        if bdf is not None:
+            df5_name = blue_team_name if bdf > rdf else red_team_name
+            draft_ft5_cap = f'<span style="color:#3a4060;font-size:10px;">Draft-only FT5: {blue_team_name} {bdf*100:.1f}% vs {red_team_name} {rdf*100:.1f}% &mdash; {df5_name} more aggressive draft</span>'
+
+        game_lbl_html = f' &mdash; {game_label}' if game_label else ''
+
+        st.markdown(f"""
+<div style="background:#0a0c10;border:1px solid #1e2330;border-radius:10px;padding:16px;
+     font-family:'SF Mono','Fira Code','Consolas',monospace;font-size:12px;margin-top:16px;">
+
+  <!-- header -->
+  <div style="display:flex;align-items:center;justify-content:space-between;
+              border-bottom:1px solid #1e2535;padding-bottom:10px;margin-bottom:14px;">
+    <div>
+      <span style="color:#c0f060;font-size:13px;font-weight:700;letter-spacing:0.06em;">
+        &#9672; LOL MATCH PREDICTOR v8
+      </span>
+    </div>
+    <span style="background:#1a2a10;color:#6db33f;font-size:10px;padding:2px 8px;
+                 border-radius:3px;border:1px solid #2a4a1a;">
+      {(league_detected or 'N/A').upper()}{game_lbl_html}
+    </span>
+  </div>
+
+  <!-- teams -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+    <div>
+      <div style="font-size:15px;font-weight:700;color:#e0e8ff;">{blue_team_name}</div>
+      <div style="color:#3a4a6a;margin-top:2px;font-size:11px;">BLUE SIDE &middot; {b_wr*100:.1f}% WR &middot; form {b_form*100:.0f}%</div>
+    </div>
+    <div style="color:#2a3050;font-size:11px;font-weight:700;padding:0 10px;">VS</div>
+    <div style="text-align:right;">
+      <div style="font-size:15px;font-weight:700;color:#e0e8ff;">{red_team_name}</div>
+      <div style="color:#3a4a6a;margin-top:2px;font-size:11px;">RED SIDE &middot; {r_wr*100:.1f}% WR &middot; form {r_form*100:.0f}%</div>
+    </div>
+  </div>
+
+  <!-- DRAFT -->
+  <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:6px;">DRAFT</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
+    <div style="background:#0f1218;border:1px solid #1e2535;border-left:2px solid #1e4a80;border-radius:5px;padding:8px 10px;">
+      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#2a5a90;margin-bottom:6px;">BLUE &middot; {blue_team_name}</div>
+      {blue_draft_html}
+    </div>
+    <div style="background:#0f1218;border:1px solid #1e2535;border-left:2px solid #801e1e;border-radius:5px;padding:8px 10px;">
+      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#903030;margin-bottom:6px;">RED &middot; {red_team_name}</div>
+      {red_draft_html}
+    </div>
+  </div>
+
+  <!-- MATCH WINNER -->
+  <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:6px;">MATCH WINNER</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px;">
+    <div style="background:#0f1218;border:1px solid #1e2535;border-radius:5px;padding:10px 12px;">
+      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:4px;">BLUE &middot; {blue_team_name}</div>
+      <div style="font-size:22px;font-weight:700;color:#c0f060;line-height:1;">{blue_win_conf*100:.1f}%</div>
+      <div style="margin-top:5px;font-size:10px;color:#3a4a6a;">odds {win_blue_odds} &middot; impl {win_blue_impl*100:.1f}% &middot; edge {'+' if win_blue_edge >= 0 else ''}{win_blue_edge*100:.1f}%</div>
+    </div>
+    <div style="background:#0f1218;border:1px solid #1e2535;border-radius:5px;padding:10px 12px;">
+      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:4px;">RED &middot; {red_team_name}</div>
+      <div style="font-size:22px;font-weight:700;color:#f06060;line-height:1;">{red_win_conf*100:.1f}%</div>
+      <div style="margin-top:5px;font-size:10px;color:#3a4a6a;">odds {win_red_odds} &middot; impl {win_red_impl*100:.1f}% &middot; edge {'+' if win_red_edge >= 0 else ''}{win_red_edge*100:.1f}%</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+    <span style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;">MODEL CONFIDENCE</span>
+    <span style="background:{win_bg};color:{win_fg};border:1px solid {win_br};font-size:9px;padding:2px 8px;border-radius:3px;font-weight:700;letter-spacing:0.08em;">{win_conf_txt}</span>
+    <span style="color:#3a4a6a;font-size:10px;">&mdash; {win_conf_desc}</span>
+  </div>
+  {win_caution_html}
+  <div style="background:{win_pick_bg};border:1px solid {win_pick_border};border-radius:5px;
+              padding:9px 14px;display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
+    <div>
+      <div style="font-size:9px;letter-spacing:0.12em;text-transform:uppercase;
+                  color:{'#4a8020' if win_pick_show else '#3a4a6a'};">RECOMMENDED BET &mdash; MATCH WINNER</div>
+      <div style="font-size:14px;font-weight:700;color:{win_pick_color};margin-top:2px;">{win_rec_str}</div>
+    </div>
+    <span style="background:{win_bg};color:{win_fg};border:1px solid {win_br};font-size:11px;
+                 padding:4px 12px;border-radius:3px;font-weight:700;">{'PICK' if win_pick_show else 'SKIP'}</span>
+  </div>
+  {draft_win_cap}
+
+  <!-- divider -->
+  <div style="border-top:1px solid #1e2535;margin:14px 0;"></div>
+
+  <!-- FIRST TO FIVE -->
+  <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:6px;">FIRST TO FIVE KILLS</div>
+  {red_signal_html}
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px;">
+    <div style="background:#0f1218;border:1px solid #1e2535;border-radius:5px;padding:10px 12px;">
+      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:4px;">BLUE &middot; {blue_team_name}</div>
+      <div style="font-size:22px;font-weight:700;color:#60a0f0;line-height:1;">{blue_ft5_conf*100:.1f}%</div>
+      <div style="margin-top:5px;font-size:10px;color:#3a4a6a;">odds {ft5_blue_odds} &middot; impl {ft5_blue_impl*100:.1f}% &middot; edge {'+' if ft5_blue_edge >= 0 else ''}{ft5_blue_edge*100:.1f}%</div>
+    </div>
+    <div style="background:#0f1218;border:1px solid #1e2535;border-radius:5px;padding:10px 12px;">
+      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:4px;">RED &middot; {red_team_name}</div>
+      <div style="font-size:22px;font-weight:700;color:#f06060;line-height:1;">{red_ft5_conf*100:.1f}%</div>
+      <div style="margin-top:5px;font-size:10px;color:#3a4a6a;">odds {ft5_red_odds} &middot; impl {ft5_red_impl*100:.1f}% &middot; edge {'+' if ft5_red_edge >= 0 else ''}{ft5_red_edge*100:.1f}%</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+    <span style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;">FT5 CONFIDENCE</span>
+    <span style="background:{ft5_bg};color:{ft5_fg};border:1px solid {ft5_br};font-size:9px;padding:2px 8px;border-radius:3px;font-weight:700;letter-spacing:0.08em;">{ft5_conf_txt}</span>
+    <span style="color:#3a4a6a;font-size:10px;">&mdash; {ft5_conf_desc}</span>
+  </div>
+  {ft5_caution_html}
+  <div style="background:{ft5_pick_bg};border:1px solid {ft5_pick_border};border-radius:5px;
+              padding:9px 14px;display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
+    <div>
+      <div style="font-size:9px;letter-spacing:0.12em;text-transform:uppercase;
+                  color:{'#2a6090' if ft5_pick_show else '#3a4a6a'};">RECOMMENDED BET &mdash; FIRST TO FIVE</div>
+      <div style="font-size:14px;font-weight:700;color:{ft5_pick_color};margin-top:2px;">{ft5_rec_str}</div>
+    </div>
+    <span style="background:{ft5_bg};color:{ft5_fg};border:1px solid {ft5_br};font-size:11px;
+                 padding:4px 12px;border-radius:3px;font-weight:700;">{'PICK' if ft5_pick_show else 'SKIP'}</span>
+  </div>
+  {draft_ft5_cap}
+
+  <!-- divider -->
+  <div style="border-top:1px solid #1e2535;margin:14px 0;"></div>
+
+  <!-- GAME STYLE -->
+  <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:8px;">GAME STYLE</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+    <div style="background:#0f1218;border:1px solid #1e2535;border-radius:5px;padding:10px 12px;">
+      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#2a5a90;margin-bottom:6px;">BLUE &middot; {blue_team_name}</div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;">
+        <div>
+          <div style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">AVG GAME</div>
+          <div style="font-size:15px;font-weight:700;color:#d0d8f0;">{fmt_gl(b_avg_gl)}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">AVG KILLS</div>
+          <div style="font-size:15px;font-weight:700;color:#d0d8f0;">{f"{b_avg_k:.1f}" if b_avg_k else "N/A"}</div>
+        </div>
+      </div>
+    </div>
+    <div style="background:#0f1218;border:1px solid #1e2535;border-radius:5px;padding:10px 12px;">
+      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#903030;margin-bottom:6px;">RED &middot; {red_team_name}</div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;">
+        <div>
+          <div style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">AVG GAME</div>
+          <div style="font-size:15px;font-weight:700;color:#d0d8f0;">{fmt_gl(r_avg_gl)}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">AVG KILLS</div>
+          <div style="font-size:15px;font-weight:700;color:#d0d8f0;">{f"{r_avg_k:.1f}" if r_avg_k else "N/A"}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
+    <div style="background:#0f1218;border-radius:4px;padding:7px 10px;">
+      <div style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">EXP TOTAL KILLS</div>
+      <div style="font-size:12px;font-weight:600;color:#f0c060;">{'~' + str(round(total_kills_est)) if total_kills_est else 'N/A'}</div>
+    </div>
+    <div style="background:#0f1218;border-radius:4px;padding:7px 10px;">
+      <div style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">H2H WIN</div>
+      <div style="font-size:12px;font-weight:600;color:#d0d8f0;">{blue_team_name[:4]} {b_win_h2h}&ndash;{r_win_h2h} {red_team_name[:4]}</div>
+    </div>
+    <div style="background:#0f1218;border-radius:4px;padding:7px 10px;">
+      <div style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">H2H FT5</div>
+      <div style="font-size:12px;font-weight:600;color:#d0d8f0;">{blue_team_name[:4]} {b_ft5_h2h}&ndash;{r_ft5_h2h} {red_team_name[:4]}</div>
+    </div>
+    <div style="background:#0f1218;border-radius:4px;padding:7px 10px;">
+      <div style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">DRAFT-ONLY</div>
+      <div style="font-size:12px;font-weight:600;color:#60a0f0;">{f"{(blue_team_name if bdw and bdw > rdw else red_team_name)[:5]} {max(bdw,rdw)*100:.1f}%" if bdw is not None else 'N/A'}</div>
+    </div>
+  </div>
+
+  {"<div style='background:#0a150a;border-left:2px solid #3a6020;padding:5px 8px;border-radius:0 4px 4px 0;font-size:10px;color:#6a8a50;margin-top:10px;'>" + league_tip + "</div>" if league_tip else ""}
+
+</div>
+""", unsafe_allow_html=True)
+
+        # ── tracker history + signals in expanders ──
+        with st.spinner("Fetching tracker history..."):
+            win_history = fetch_tracker_history(win_pick_conf, win_conf_level, st.secrets["GOOGLE_WINNER_SHEETS_ID"])
+            ft5_history = fetch_tracker_history(ft5_pick_conf, ft5_conf_level, st.secrets["GOOGLE_SHEETS_ID"])
+
+        if win_history or ft5_history:
+            with st.expander("📈 Tracker History", expanded=True):
+                if win_history:
+                    st.markdown("**Winner picks**")
+                    st.markdown(format_history(win_history, "Winner"))
+                if ft5_history:
+                    st.markdown("**FT5 picks**")
+                    st.markdown(format_history(ft5_history, "FT5"))
+
+        with st.expander("📊 Signal Breakdown", expanded=False):
+            st.markdown("**Match Winner signals**")
             show_signal("Team win rate",    b_wr,       r_wr,       0.05, 0.15, blue_team_name, red_team_name)
             show_signal("Recent form",      b_form,     r_form,     0.10, 0.25, blue_team_name, red_team_name, ".0f")
             show_signal("Champion quality", b_champ_wr, r_champ_wr, 0.02, 0.06, blue_team_name, red_team_name)
@@ -1213,6 +1463,16 @@ if predict_btn:
             else:
                 st.write("**H2H:** No history — ⚪ Neutral")
             st.write(f"**Blue side:** 53.1% historical — ⚪ Slight edge 🔵 {blue_team_name}")
+            st.markdown("**FT5 signals**")
+            show_signal("Early game rate", b_early,      r_early,      0.05, 0.15, blue_team_name, red_team_name)
+            show_signal("Early form",      b_early_form, r_early_form, 0.10, 0.25, blue_team_name, red_team_name, ".0f")
+            show_signal("Aggression",      b_agg,        r_agg,        0.03, 0.08, blue_team_name, red_team_name)
+            faster   = blue_team_name if b_speed < r_speed else red_team_name
+            spd_diff = abs(b_speed - r_speed)
+            if spd_diff >= 2.0:   spd_str = f"🟢 Strong — {faster} significantly faster"
+            elif spd_diff >= 0.5: spd_str = f"🟡 Moderate — {faster} slightly faster"
+            else:                 spd_str = "⚪ Weak — similar speed"
+            st.write(f"**Kill speed:** 🔵 {b_speed:.1f}m vs 🔴 {r_speed:.1f}m — {spd_str}")
 
         if blue or red:
             with st.expander("🏅 Champion Ratings", expanded=False):
@@ -1224,9 +1484,8 @@ if predict_btn:
                         rc_val  = role_champ_rate.get((pos, champ.strip()), 0.5)
                         pc_val  = pc_rate.get((player.strip(), champ.strip()), 0.5) if player.strip() else rc_val
                         pcg     = pc_games_d.get((player.strip(), champ.strip()), 0) if player.strip() else 0
-                        blended = PC_WEIGHT * pc_val + RC_WEIGHT * rc_val
                         cwr     = win_champ_rate.get(champ, 0.5)
-                        rating  = rate_champ(cwr, blended)
+                        rating  = rate_champ(cwr, PC_WEIGHT * pc_val + RC_WEIGHT * rc_val)
                         lbl     = POS_LABELS[i] if i < len(POS_LABELS) else ''
                         name    = player if player.strip() else "Unknown"
                         gstr    = f"({pcg}g)" if pcg > 0 else ""
@@ -1239,181 +1498,12 @@ if predict_btn:
                         rc_val  = role_champ_rate.get((pos, champ.strip()), 0.5)
                         pc_val  = pc_rate.get((player.strip(), champ.strip()), 0.5) if player.strip() else rc_val
                         pcg     = pc_games_d.get((player.strip(), champ.strip()), 0) if player.strip() else 0
-                        blended = PC_WEIGHT * pc_val + RC_WEIGHT * rc_val
                         cwr     = win_champ_rate.get(champ, 0.5)
-                        rating  = rate_champ(cwr, blended)
+                        rating  = rate_champ(cwr, PC_WEIGHT * pc_val + RC_WEIGHT * rc_val)
                         lbl     = POS_LABELS[i] if i < len(POS_LABELS) else ''
                         name    = player if player.strip() else "Unknown"
                         gstr    = f"({pcg}g)" if pcg > 0 else ""
                         st.write(f"**{lbl}** {name} — {champ}: role {rc_val*100:.0f}% | player {pc_val*100:.0f}% {gstr} → {rating}")
-
-        st.divider()
-
-        st.markdown("### ⚔️ First to Five Kills")
-        ft5_color = "🔵" if blue_ft5_conf > red_ft5_conf else "🔴"
-        st.markdown(f"#### {ft5_color} Model pick: **{ft5_winner}**")
-
-        # Strong red signal — informational only, no unit boost
-        # Backtest: 66% red accuracy, 14.9% ROI when edge exists (normal calc_edge handles units)
-        if ft5_strong_red:
-            st.error(f"🚨 **STRONG RED SIGNAL** — Model blue confidence {blue_ft5_conf*100:.1f}% "
-                     f"(below 48%). Backtest shows red picks in this range are **66% accurate** "
-                     f"with **14.9% ROI**. Trust the unit recommendation below.")
-
-        st.caption(f"⏱️ Est. ~{est_time:.1f} min ({faster_team} historically faster)")
-        fc1, fc2 = st.columns(2)
-        with fc1:
-            st.metric(f"🔵 {blue_team_name}", f"{blue_ft5_conf*100:.1f}%",
-                      delta=f"Edge: {ft5_blue_edge*100:.1f}%")
-            st.write(f"Odds: {ft5_blue_odds} | Implied: {ft5_blue_impl*100:.1f}%")
-            st.write(odds_label(ft5_blue_odds))
-            if blue_ft5_conf > red_ft5_conf:
-                st.info(f"💰 {ft5_blue_units}u — {ft5_blue_label}" if ft5_blue_units > 0 else "💰 ⛔ SKIP")
-        with fc2:
-            st.metric(f"🔴 {red_team_name}", f"{red_ft5_conf*100:.1f}%",
-                      delta=f"Edge: {ft5_red_edge*100:.1f}%")
-            st.write(f"Odds: {ft5_red_odds} | Implied: {ft5_red_impl*100:.1f}%")
-            st.write(odds_label(ft5_red_odds))
-            if red_ft5_conf > blue_ft5_conf:
-                st.info(f"💰 {ft5_red_units}u — {ft5_red_label}" if ft5_red_units > 0 else "💰 ⛔ SKIP")
-
-        if bdf is not None:
-            df5 = "🔵" if bdf > rdf else "🔴"
-            dn5 = blue_team_name if bdf > rdf else red_team_name
-            st.caption(f"⚖️ Draft-only: 🔵 {bdf*100:.1f}% vs 🔴 {rdf*100:.1f}% — {df5} {dn5} more aggressive draft")
-
-        st.markdown(f"**📊 Confidence: {ft5_conf_level}** — {ft5_conf_desc}")
-
-        with st.spinner("Fetching your FT5 tracker history..."):
-            ft5_history = fetch_tracker_history(
-                ft5_pick_conf, ft5_conf_level,
-                st.secrets["GOOGLE_SHEETS_ID"])
-        if ft5_history:
-            with st.expander("📈 Your Tracker History (FT5)", expanded=True):
-                st.markdown(format_history(ft5_history, "FT5"))
-
-        for r in ft5_reasons: st.write(f"✔ {r}")
-        for w in ft5_warnings:
-            if "Mixed signals" in w:
-                early_dir = f"🔵 {blue_team_name}" if b_early > r_early else f"🔴 {red_team_name}"
-                form_dir  = f"🔵 {blue_team_name}" if b_early_form > r_early_form else f"🔴 {red_team_name}"
-                agg_dir   = f"🔵 {blue_team_name}" if b_agg > r_agg else f"🔴 {red_team_name}"
-                st.write(f"⚠️ Mixed signals — early rate favours {early_dir} ({abs(b_early-r_early)*100:.1f}%), "
-                         f"form favours {form_dir} ({abs(b_early_form-r_early_form)*100:.0f}%), "
-                         f"aggression favours {agg_dir} ({abs(b_agg-r_agg)*100:.1f}%)")
-            elif "Weak signal" in w:
-                st.write(f"⚠️ Weak signals — early rate diff: {abs(b_early-r_early)*100:.1f}%, "
-                         f"form diff: {abs(b_early_form-r_early_form)*100:.0f}%, "
-                         f"aggression diff: {abs(b_agg-r_agg)*100:.1f}%")
-            else:
-                st.write(f"⚠️ {w}")
-        if ft5_caution:
-            st.warning("60-65% range — treat with extra caution")
-
-        with st.expander("📊 FT5 Signal Breakdown", expanded=False):
-            show_signal("Early game rate", b_early,      r_early,      0.05, 0.15, blue_team_name, red_team_name)
-            show_signal("Early form",      b_early_form, r_early_form, 0.10, 0.25, blue_team_name, red_team_name, ".0f")
-            show_signal("Aggression",      b_agg,        r_agg,        0.03, 0.08, blue_team_name, red_team_name)
-            faster   = blue_team_name if b_speed < r_speed else red_team_name
-            spd_diff = abs(b_speed - r_speed)
-            if spd_diff >= 2.0:   spd_str = f"🟢 Strong — {faster} significantly faster"
-            elif spd_diff >= 0.5: spd_str = f"🟡 Moderate — {faster} slightly faster"
-            else:                 spd_str = "⚪ Weak — similar speed"
-            st.write(f"**Kill speed:** 🔵 {b_speed:.1f}m vs 🔴 {r_speed:.1f}m — {spd_str}")
-            if b_ft5_h2h + r_ft5_h2h > 0:
-                h2h_diff  = ft5_h2h_r - 0.5
-                h_str     = "🟢 Strong" if abs(h2h_diff) >= 0.25 else ("🟡 Moderate" if abs(h2h_diff) >= 0.10 else "⚪ Weak")
-                direction = f"favours 🔵 {blue_team_name}" if h2h_diff > 0 else f"favours 🔴 {red_team_name}"
-                st.write(f"**Early H2H:** 🔵 {b_ft5_h2h}–{r_ft5_h2h} 🔴 — {h_str} {direction}")
-            else:
-                st.write("**Early H2H:** No history — ⚪ Neutral")
-
-        if blue or red:
-            with st.expander("🔥 Champion Aggression", expanded=False):
-                if blue:
-                    st.markdown(f"**🔵 {blue_team_name}**")
-                    for i, champ in enumerate(blue):
-                        player = blue_players[i] if i < len(blue_players) else ''
-                        agg    = champ_aggression.get(champ, 0.5)
-                        rating = rate_agg(agg)
-                        lbl    = POS_LABELS[i] if i < len(POS_LABELS) else ''
-                        name   = player if player.strip() else "Unknown"
-                        st.write(f"**{lbl}** {name} — {champ}: {agg*100:.0f}% → {rating}")
-                if red:
-                    st.markdown(f"**🔴 {red_team_name}**")
-                    for i, champ in enumerate(red):
-                        player = red_players[i] if i < len(red_players) else ''
-                        agg    = champ_aggression.get(champ, 0.5)
-                        rating = rate_agg(agg)
-                        lbl    = POS_LABELS[i] if i < len(POS_LABELS) else ''
-                        name   = player if player.strip() else "Unknown"
-                        st.write(f"**{lbl}** {name} — {champ}: {agg*100:.0f}% → {rating}")
-
-        # =====================================================
-        # V8.2: TOTAL KILLS OVER/UNDER PREDICTION
-        # =====================================================
-        if kls_point is not None and len(blue) == 5 and len(red) == 5:
-            st.divider()
-            st.markdown(f"### 💀 Total Kills Over/Under — Line {kills_line}")
-
-            # Build features and get predictions
-            patch_for_kls = current_patch.strip() if current_patch.strip() else (
-                max(patch_release_dt.keys(), key=lambda p: patch_release_dt[p])
-                if patch_release_dt else ""
-            )
-            league_for_kls = "LCK"  # neutral default — model uses hashed league_idx
-            try:
-                X_kls = build_kills_features(blue_team_norm, red_team_norm,
-                                              blue, red, patch_for_kls, league_for_kls)
-                # Point + interval estimates
-                k_point = float(kls_point.predict(X_kls)[0])
-                k_p10   = float(kls_q10.predict(X_kls)[0]) if kls_q10 is not None else k_point - 5
-                k_p90   = float(kls_q90.predict(X_kls)[0]) if kls_q90 is not None else k_point + 5
-
-                # O/U probability at user's line
-                ou_result = predict_kills_ou(X_kls, kills_line)
-                if ou_result:
-                    prob_over, closest_line = ou_result
-                    prob_under = 1 - prob_over
-
-                    # Cap predictions at sensible bounds
-                    prob_over  = min(max(prob_over,  0.05), 0.95)
-                    prob_under = min(max(prob_under, 0.05), 0.95)
-
-                    # Edge calculations
-                    over_edge,  over_units,  over_label,  over_impl  = calc_edge(prob_over,  kills_over_odds)
-                    under_edge, under_units, under_label, under_impl = calc_edge(prob_under, kills_under_odds)
-
-                    # Display
-                    kc1, kc2 = st.columns(2)
-                    with kc1:
-                        st.metric(f"⬆️ OVER {kills_line}", f"{prob_over*100:.1f}%",
-                                  delta=f"Edge: {over_edge*100:.1f}%")
-                        st.write(f"Odds: {kills_over_odds} | Implied: {over_impl*100:.1f}%")
-                        st.write(odds_label(kills_over_odds))
-                        if prob_over > prob_under:
-                            st.info(f"💰 {over_units}u — {over_label}" if over_units > 0 else "💰 ⛔ SKIP")
-                    with kc2:
-                        st.metric(f"⬇️ UNDER {kills_line}", f"{prob_under*100:.1f}%",
-                                  delta=f"Edge: {under_edge*100:.1f}%")
-                        st.write(f"Odds: {kills_under_odds} | Implied: {under_impl*100:.1f}%")
-                        st.write(odds_label(kills_under_odds))
-                        if prob_under > prob_over:
-                            st.info(f"💰 {under_units}u — {under_label}" if under_units > 0 else "💰 ⛔ SKIP")
-
-                    # Context info
-                    st.caption(f"📊 Model expects ~{k_point:.0f} kills (range {k_p10:.0f}-{k_p90:.0f}) | "
-                               f"O/U classifier trained on line {closest_line}" +
-                               (f" (your line {kills_line} is within range)" if abs(kills_line - closest_line) <= 0.5
-                                else f" (your line {kills_line} extrapolated)"))
-                    st.caption("⚠️ Kills model has modest edge (~5% over baseline). Best at lines 24.5-30.5. "
-                               "Treat lower-confidence picks (<58%) as marginal.")
-                else:
-                    st.warning("Kills O/U model unavailable for this line")
-            except Exception as e:
-                st.warning(f"Could not compute kills prediction: {e}")
-
-        st.divider()
 
         if len(blue) == 5 and len(red) == 5:
             with st.expander("🤖 AI Analysis", expanded=False):
@@ -1439,7 +1529,14 @@ if predict_btn:
         if send_win_sheet:
             status_parts.append("🏆 Winner logged" if winner_sheets_ok is True else "⚠️ Winner sheet failed")
         if status_parts:
-            st.caption(" | ".join(status_parts))
+            st.markdown(
+                '<div style="color:#3a4a6a;font-size:0.75rem;font-family:monospace;text-align:center;margin-top:8px;">'
+                + " &nbsp;|&nbsp; ".join(status_parts) + '</div>',
+                unsafe_allow_html=True
+            )
 
-        st.divider()
-        st.caption("V8.1 | Win 65.4% (leak-free) / AUC 0.6944 | FT5 57.9% | Kills O/U at lines 22-30")
+        st.markdown(
+            '<div style="color:#1e2a1e;font-size:0.72rem;font-family:monospace;text-align:center;margin-top:12px;">'
+            'V8 | Win 67.50% / AUC 0.7172 | FT5 58.56% | Best ROI at 2.30+ odds</div>',
+            unsafe_allow_html=True
+        )
