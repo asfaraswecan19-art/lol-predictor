@@ -204,6 +204,8 @@ def ft5_confidence(blue_prob, b_early_rate, r_early_rate,
     return level, desc, reasons, warnings
 
 
+@st.cache_resource
+def load_models():
     with open('model_payload.pkl', 'rb') as f:
         p = pickle.load(f)
     return p
