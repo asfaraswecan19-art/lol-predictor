@@ -15,96 +15,8 @@ st.set_page_config(
     layout="centered"
 )
 
-st.markdown("""
-<style>
-  /* hide the white header toolbar */
-  header[data-testid="stHeader"] { display: none !important; }
-  #MainMenu { display: none !important; }
-  footer { display: none !important; }
-  .stDeployButton { display: none !important; }
-  div[data-testid="stToolbar"] { display: none !important; }
-  /* dark bg, zero top padding now toolbar is gone */
-  .stApp { background: #0a0c10; color: #d0d8f0; }
-  .block-container { padding-top: 0.75rem !important; }
-  hr { border-color: #1e2535 !important; }
-  .stTextInput > div > div > input,
-  .stTextArea > div > div > textarea,
-  .stNumberInput > div > div > input {
-    background: #0f1218 !important;
-    border: 1px solid #2a3050 !important;
-    color: #d0d8f0 !important;
-    border-radius: 6px !important;
-    outline: none !important;
-    box-shadow: none !important;
-    font-family: 'SF Mono','Fira Code','Consolas',monospace !important;
-  }
-  .stTextInput > div > div > input:focus,
-  .stTextArea > div > div > textarea:focus,
-  .stNumberInput > div > div > input:focus {
-    border-color: #3a6a30 !important;
-    box-shadow: 0 0 0 2px rgba(80,160,40,0.15) !important;
-    outline: none !important;
-  }
-  .stTextInput > div > div, .stTextArea > div > div, .stNumberInput > div > div {
-    border: none !important; box-shadow: none !important; background: transparent !important;
-  }
-  /* number input stepper buttons */
-  .stNumberInput > div > div > div { background: #0f1218 !important; }
-  button[data-testid="stNumberInputStepDown"],
-  button[data-testid="stNumberInputStepUp"] {
-    background: #0f1218 !important;
-    border-color: #2a3050 !important;
-    color: #4a6a30 !important;
-  }
-  button[data-testid="stNumberInputStepDown"]:hover,
-  button[data-testid="stNumberInputStepUp"]:hover {
-    background: #1a2a10 !important;
-    color: #80d040 !important;
-  }
-  /* kill any white wrapper divs around inputs */
-  .stNumberInput div[data-baseweb="input"] { background: #0f1218 !important; }
-  div[data-baseweb="base-input"] { background: #0f1218 !important; }
-  div[data-baseweb="input"] { background: #0f1218 !important; border-color: #2a3050 !important; }
-  label { color: #3a4a6a !important; font-size: 0.78rem !important;
-          font-family: 'SF Mono','Fira Code','Consolas',monospace !important;
-          text-transform: uppercase !important; letter-spacing: 0.08em !important; }
-  div[data-testid="stButton"] > button[kind="primary"] {
-    background: #0d1f05 !important; border: 1px solid #2a5a10 !important;
-    color: #80d040 !important; font-family: 'SF Mono','Fira Code',monospace !important;
-    font-weight: 700 !important; border-radius: 5px !important; letter-spacing: 0.06em !important;
-  }
-  div[data-testid="stButton"] > button[kind="secondary"] {
-    background: #0f1218 !important; border: 1px solid #1e2535 !important;
-    color: #4a5a7a !important; font-family: 'SF Mono','Fira Code',monospace !important;
-    border-radius: 5px !important;
-  }
-  div[data-testid="stButton"] > button[kind="secondary"]:hover {
-    border-color: #3a4a6a !important; color: #8090b0 !important;
-  }
-  div[data-testid="stExpander"] {
-    background: #0f1218 !important; border: 1px solid #1e2535 !important; border-radius: 6px !important;
-  }
-  div[data-testid="stExpander"] summary { color: #4a5a7a !important; font-family: 'SF Mono','Fira Code',monospace !important; }
-  div[data-testid="metric-container"] {
-    background: #0f1218; border: 1px solid #1e2535; border-radius: 6px; padding: 0.6rem 0.8rem;
-  }
-  div[data-testid="metric-container"] label { color: #3a4060 !important; }
-  div[data-testid="metric-container"] div[data-testid="stMetricValue"] { color: #c0f060 !important; font-size: 1.4rem !important; font-family: 'SF Mono','Fira Code',monospace !important; }
-  div[data-testid="metric-container"] div[data-testid="stMetricDelta"] svg { display:none; }
-  .stCheckbox label { color: #4a5a7a !important; text-transform: none !important; letter-spacing: 0 !important; }
-  p, .stMarkdown p { color: #8090b0; font-family: 'SF Mono','Fira Code',monospace; font-size: 0.82rem; }
-  h1,h2,h3 { font-family: 'SF Mono','Fira Code',monospace !important; color: #c0f060 !important; }
-  small, .stCaption { color: #3a4a6a !important; font-family: 'SF Mono','Fira Code',monospace !important; }
-  div[data-testid="stAlert"] { border-radius: 5px !important; font-family: 'SF Mono','Fira Code',monospace !important; }
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown('''
-<div style="border-bottom:1px solid #1e2535;padding-bottom:12px;margin-bottom:4px;">
-  <span style="color:#c0f060;font-size:1.3rem;font-weight:700;font-family:'SF Mono','Fira Code',monospace;letter-spacing:0.06em;">&#9672; LOL MATCH PREDICTOR v8</span>
-  <span style="color:#3a4a6a;font-size:0.72rem;font-family:'SF Mono','Fira Code',monospace;margin-left:12px;">Win ~67.50% / AUC 0.7172 &middot; FT5 58.56% &middot; Gold trajectory features</span>
-</div>
-''', unsafe_allow_html=True)
+st.title("🎮 LoL Pro Match Predictor")
+st.caption("V8 | Win ~67.09% / AUC 0.7227 · FT5 57.16% · Gold trajectory + Grid search params")
 
 FORM_WINDOW       = 8
 RECENT_WINDOW     = 20
@@ -292,8 +204,6 @@ def ft5_confidence(blue_prob, b_early_rate, r_early_rate,
     return level, desc, reasons, warnings
 
 
-@st.cache_resource
-def load_models():
     with open('model_payload.pkl', 'rb') as f:
         p = pickle.load(f)
     return p
@@ -377,7 +287,7 @@ def parse_champion_input(text):
         i += 1
     return champs
 
-st.markdown('<span style="color:#3a6a20;font-size:0.75rem;">&#9654; MODELS LOADED</span>', unsafe_allow_html=True)
+st.success("Models ready!")
 
 defaults = {
     'blue_team_input': '', 'red_team_input': '',
@@ -779,23 +689,12 @@ with btn_col2:
                 st.session_state[f'red_p_{pos}'], st.session_state[f'blue_p_{pos}']
         st.rerun()
 
-# ── add CSS to shrink input height and tighten spacing ──
-st.markdown("""
-<style>
-  .stTextInput > div > div > input { padding: 4px 8px !important; min-height: 0 !important; height: 30px !important; }
-  .stTextArea > div > div > textarea { padding: 4px 8px !important; }
-  .stNumberInput > div > div > input { padding: 4px 6px !important; height: 30px !important; }
-  div[data-testid="stVerticalBlock"] > div { gap: 0.25rem !important; }
-  .stNumberInput button { height: 30px !important; }
-</style>
-""", unsafe_allow_html=True)
-
 col1, col2 = st.columns(2)
 
 with col1:
-    st.markdown('<div style="color:#4a90d9;font-size:11px;font-weight:700;font-family:monospace;letter-spacing:0.08em;margin-bottom:4px;">🔵 BLUE SIDE</div>', unsafe_allow_html=True)
+    st.markdown("### 🔵 Blue Side")
     blue_team_raw   = st.text_input("Team name", key='blue_team_input',
-                                     placeholder="e.g. T1, Gen.G, Cloud9...", label_visibility="collapsed")
+                                     placeholder="e.g. T1, Gen.G, Cloud9...")
     blue_team_match = fuzzy_match_team(blue_team_raw) if blue_team_raw else None
     if blue_team_match and blue_team_match in team_lineups:
         lineup = team_lineups[blue_team_match]
@@ -806,35 +705,32 @@ with col1:
             if not st.session_state['blue_p_adc']: st.session_state['blue_p_adc'] = lineup.get('adc','')
             if not st.session_state['blue_p_sup']: st.session_state['blue_p_sup'] = lineup.get('sup','')
     if blue_team_raw and blue_team_match:
-        st.markdown(f'<div style="color:#3a6a20;font-size:10px;font-family:monospace;margin:-2px 0 2px;">✓ {blue_team_match}</div>', unsafe_allow_html=True)
-    elif blue_team_raw:
-        st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;margin:-2px 0 2px;">⚪ unknown — using averages</div>', unsafe_allow_html=True)
+        st.caption(f"✅ Matched: {blue_team_match}")
+    elif blue_team_raw and not blue_team_match:
+        st.caption("⚪ Unknown team — using average stats")
 
-    blue_comp_raw = st.text_area("Champions", key='blue_comp_input',
+    blue_comp_raw = st.text_area("Champion comp (Top Jng Mid ADC Sup)",
+                                  key='blue_comp_input',
                                   placeholder="e.g. Gnar Nocturne Ahri Caitlyn Bard",
-                                  height=58, label_visibility="collapsed")
+                                  height=80)
     blue_parsed = parse_champion_input(blue_comp_raw)
     if blue_comp_raw:
         if len(blue_parsed) == 5:
-            st.markdown(f'<div style="color:#3a6a20;font-size:10px;font-family:monospace;margin:-2px 0 2px;">✓ {' · '.join([f'{POS_LABELS[i]}: {blue_parsed[i]}' for i in range(5)])}</div>', unsafe_allow_html=True)
+            st.caption(f"✅ {' | '.join([f'{POS_LABELS[i]}: {blue_parsed[i]}' for i in range(5)])}")
         else:
-            st.markdown(f'<div style="color:#8a6020;font-size:10px;font-family:monospace;margin:-2px 0 2px;">⚠ {len(blue_parsed)}/5 parsed</div>', unsafe_allow_html=True)
+            st.caption(f"⚠️ Parsed {len(blue_parsed)}/5 — {', '.join(blue_parsed) if blue_parsed else 'none recognized'}")
 
-    st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin:4px 0 2px;">PLAYERS (optional)</div>', unsafe_allow_html=True)
-    pb1, pb2, pb3 = st.columns(3)
-    with pb1:
-        blue_p_top = st.text_input("Top", key='blue_p_top', placeholder="Top")
-        blue_p_adc = st.text_input("ADC", key='blue_p_adc', placeholder="ADC")
-    with pb2:
-        blue_p_jg  = st.text_input("Jng", key='blue_p_jg',  placeholder="Jng")
-        blue_p_sup = st.text_input("Sup", key='blue_p_sup', placeholder="Sup")
-    with pb3:
-        blue_p_mid = st.text_input("Mid", key='blue_p_mid', placeholder="Mid")
+    st.markdown("**Players (optional)**")
+    blue_p_top = st.text_input("Top",     key='blue_p_top')
+    blue_p_jg  = st.text_input("Jungle",  key='blue_p_jg')
+    blue_p_mid = st.text_input("Mid",     key='blue_p_mid')
+    blue_p_adc = st.text_input("ADC",     key='blue_p_adc')
+    blue_p_sup = st.text_input("Support", key='blue_p_sup')
 
 with col2:
-    st.markdown('<div style="color:#e05454;font-size:11px;font-weight:700;font-family:monospace;letter-spacing:0.08em;margin-bottom:4px;">🔴 RED SIDE</div>', unsafe_allow_html=True)
+    st.markdown("### 🔴 Red Side")
     red_team_raw   = st.text_input("Team name", key='red_team_input',
-                                    placeholder="e.g. T1, Gen.G, Cloud9...", label_visibility="collapsed")
+                                    placeholder="e.g. T1, Gen.G, Cloud9...")
     red_team_match = fuzzy_match_team(red_team_raw) if red_team_raw else None
     if red_team_match and red_team_match in team_lineups:
         lineup = team_lineups[red_team_match]
@@ -845,56 +741,55 @@ with col2:
             if not st.session_state['red_p_adc']: st.session_state['red_p_adc'] = lineup.get('adc','')
             if not st.session_state['red_p_sup']: st.session_state['red_p_sup'] = lineup.get('sup','')
     if red_team_raw and red_team_match:
-        st.markdown(f'<div style="color:#3a6a20;font-size:10px;font-family:monospace;margin:-2px 0 2px;">✓ {red_team_match}</div>', unsafe_allow_html=True)
-    elif red_team_raw:
-        st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;margin:-2px 0 2px;">⚪ unknown — using averages</div>', unsafe_allow_html=True)
+        st.caption(f"✅ Matched: {red_team_match}")
+    elif red_team_raw and not red_team_match:
+        st.caption("⚪ Unknown team — using average stats")
 
-    red_comp_raw = st.text_area("Champions", key='red_comp_input',
+    red_comp_raw = st.text_area("Champion comp (Top Jng Mid ADC Sup)",
+                                 key='red_comp_input',
                                  placeholder="e.g. Ambessa Pantheon Aurora Jhin Neeko",
-                                 height=58, label_visibility="collapsed")
+                                 height=80)
     red_parsed = parse_champion_input(red_comp_raw)
     if red_comp_raw:
         if len(red_parsed) == 5:
-            st.markdown(f'<div style="color:#3a6a20;font-size:10px;font-family:monospace;margin:-2px 0 2px;">✓ {' · '.join([f'{POS_LABELS[i]}: {red_parsed[i]}' for i in range(5)])}</div>', unsafe_allow_html=True)
+            st.caption(f"✅ {' | '.join([f'{POS_LABELS[i]}: {red_parsed[i]}' for i in range(5)])}")
         else:
-            st.markdown(f'<div style="color:#8a6020;font-size:10px;font-family:monospace;margin:-2px 0 2px;">⚠ {len(red_parsed)}/5 parsed</div>', unsafe_allow_html=True)
+            st.caption(f"⚠️ Parsed {len(red_parsed)}/5 — {', '.join(red_parsed) if red_parsed else 'none recognized'}")
 
-    st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin:4px 0 2px;">PLAYERS (optional)</div>', unsafe_allow_html=True)
-    pr1, pr2, pr3 = st.columns(3)
-    with pr1:
-        red_p_top = st.text_input("Top", key='red_p_top', placeholder="Top")
-        red_p_adc = st.text_input("ADC", key='red_p_adc', placeholder="ADC")
-    with pr2:
-        red_p_jg  = st.text_input("Jng", key='red_p_jg',  placeholder="Jng")
-        red_p_sup = st.text_input("Sup", key='red_p_sup', placeholder="Sup")
-    with pr3:
-        red_p_mid = st.text_input("Mid", key='red_p_mid', placeholder="Mid")
+    st.markdown("**Players (optional)**")
+    red_p_top = st.text_input("Top",     key='red_p_top')
+    red_p_jg  = st.text_input("Jungle",  key='red_p_jg')
+    red_p_mid = st.text_input("Mid",     key='red_p_mid')
+    red_p_adc = st.text_input("ADC",     key='red_p_adc')
+    red_p_sup = st.text_input("Support", key='red_p_sup')
 
-# ── odds + game # row ──
-gc1, gc2, gc3, gc4 = st.columns([1, 1, 1, 1])
+gc1, gc2, gc3 = st.columns([1, 2, 2])
 with gc1:
     game_number = st.text_input("Game #", key='game_number', placeholder="1, 2, 3...")
 with gc2:
-    st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin-bottom:2px;">WIN ODDS</div>', unsafe_allow_html=True)
-    wo1, wo2 = st.columns(2)
-    with wo1:
-        win_blue_odds = st.number_input("Blue", min_value=1.01, max_value=10.0, value=1.85, step=0.05, key="wbo")
-    with wo2:
-        win_red_odds  = st.number_input("Red",  min_value=1.01, max_value=10.0, value=1.95, step=0.05, key="wro")
+    st.markdown("**Match Winner**")
+    win_blue_odds = st.number_input("Blue odds", min_value=1.01, max_value=10.0,
+                                     value=1.85, step=0.05, key="wbo")
+    win_red_odds  = st.number_input("Red odds",  min_value=1.01, max_value=10.0,
+                                     value=1.95, step=0.05, key="wro")
 with gc3:
-    st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin-bottom:2px;">FT5 ODDS</div>', unsafe_allow_html=True)
-    fo1, fo2 = st.columns(2)
-    with fo1:
-        ft5_blue_odds = st.number_input("Blue", min_value=1.01, max_value=10.0, value=1.85, step=0.05, key="fbo")
-    with fo2:
-        ft5_red_odds  = st.number_input("Red",  min_value=1.01, max_value=10.0, value=1.95, step=0.05, key="fro")
-with gc4:
-    st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin-bottom:2px;">LOG TO</div>', unsafe_allow_html=True)
-    send_discord   = st.checkbox("Discord",      value=True)
-    send_ft5_sheet = st.checkbox("FT5 Sheet",    value=True)
-    send_win_sheet = st.checkbox("Win Sheet",    value=True)
+    st.markdown("**First to Five**")
+    ft5_blue_odds = st.number_input("Blue odds", min_value=1.01, max_value=10.0,
+                                     value=1.85, step=0.05, key="fbo")
+    ft5_red_odds  = st.number_input("Red odds",  min_value=1.01, max_value=10.0,
+                                     value=1.95, step=0.05, key="fro")
 
-predict_btn = st.button("◈  PREDICT", type="primary", use_container_width=True)
+chk1, chk2, chk3, chk4 = st.columns(4)
+with chk1:
+    send_discord   = st.checkbox("📨 Discord",      value=True)
+with chk2:
+    send_ft5_sheet = st.checkbox("📊 FT5 Sheet",    value=True)
+with chk3:
+    send_win_sheet = st.checkbox("🏆 Winner Sheet", value=True)
+with chk4:
+    st.empty()
+
+predict_btn = st.button("🔮 Predict", type="primary", use_container_width=True)
 
 # =================================================================
 # PREDICTION
@@ -1131,326 +1026,111 @@ if predict_btn:
 
         discord_sent = send_discord_dm(discord_msg) if send_discord else None
 
-        # ── helper: conf level text + pill color ──
-        def conf_display(level):
-            if 'HIGH'   in level: return ('HIGH',   '#0a1f05', '#80d040', '#2a5010')
-            if 'MEDIUM' in level: return ('MEDIUM', '#1f1a05', '#d0a040', '#5a4010')
-            return                        ('LOW',    '#1a0505', '#f06060', '#5a1010')
+        st.divider()
 
-        def agg_tag(agg_score):
-            if agg_score >= 0.58: return ('high', '#c0f060')
-            if agg_score >= 0.48: return ('avg',  '#8090b0')
-            return                       ('low',  '#60a0f0')
+        match_title = f"### {blue_team_name} vs {red_team_name}"
+        if game_label: match_title += f" — {game_label}"
+        st.markdown(match_title)
 
-        def fmt_gl(seconds):
-            if not seconds or seconds == 0: return 'N/A'
-            m = int(seconds // 60); s = int(seconds % 60)
-            return f"{m}:{s:02d}"
+        with st.expander("📋 Team Stats", expanded=False):
+            sc1, sc2 = st.columns(2)
+            with sc1:
+                st.markdown(f"**🔵 {blue_team_name}**")
+                st.write(f"Win rate: {b_wr*100:.1f}%")
+                st.write(f"Form (L5): {b_form*100:.0f}%")
+                st.write(f"Early rate: {b_early*100:.1f}%")
+                st.write(f"Avg kill time: {b_speed:.1f}m")
+            with sc2:
+                st.markdown(f"**🔴 {red_team_name}**")
+                st.write(f"Win rate: {r_wr*100:.1f}%")
+                st.write(f"Form (L5): {r_form*100:.0f}%")
+                st.write(f"Early rate: {r_early*100:.1f}%")
+                st.write(f"Avg kill time: {r_speed:.1f}m")
+            hc1, hc2 = st.columns(2)
+            with hc1:
+                st.write(f"Win H2H: {blue_team_name} {b_win_h2h}–{r_win_h2h} {red_team_name}")
+            with hc2:
+                st.write(f"Early H2H: {blue_team_name} {b_ft5_h2h}–{r_ft5_h2h} {red_team_name}")
 
-        # ── game style data ──
-        b_avg_gl = team_avg_gamelength.get(blue_team_norm, 0)
-        r_avg_gl = team_avg_gamelength.get(red_team_norm, 0)
-        b_avg_k  = team_avg_kills.get(blue_team_norm, 0)
-        r_avg_k  = team_avg_kills.get(red_team_norm, 0)
-        total_kills_est = (b_avg_k + r_avg_k) if (b_avg_k > 0 and r_avg_k > 0) else 0
+        st.markdown("### 🏆 Match Winner")
+        winner_color = "🔵" if blue_win_conf > red_win_conf else "🔴"
+        st.markdown(f"#### {winner_color} Model pick: **{win_winner}**")
+        wc1, wc2 = st.columns(2)
+        with wc1:
+            st.metric(f"🔵 {blue_team_name}", f"{blue_win_conf*100:.1f}%",
+                      delta=f"Edge: {win_blue_edge*100:.1f}%")
+            st.write(f"Odds: {win_blue_odds} | Implied: {win_blue_impl*100:.1f}%")
+            st.write(odds_label(win_blue_odds))
+            if blue_win_conf > red_win_conf:
+                st.info(f"💰 {win_blue_units}u — {win_blue_label}" if win_blue_units > 0 else "💰 ⛔ SKIP")
+        with wc2:
+            st.metric(f"🔴 {red_team_name}", f"{red_win_conf*100:.1f}%",
+                      delta=f"Edge: {win_red_edge*100:.1f}%")
+            st.write(f"Odds: {win_red_odds} | Implied: {win_red_impl*100:.1f}%")
+            st.write(odds_label(win_red_odds))
+            if red_win_conf > blue_win_conf:
+                st.info(f"💰 {win_red_units}u — {win_red_label}" if win_red_units > 0 else "💰 ⛔ SKIP")
 
-        # ── confidence display values ──
-        win_conf_txt, win_bg, win_fg, win_br = conf_display(win_conf_level)
-        ft5_conf_txt, ft5_bg, ft5_fg, ft5_br = conf_display(ft5_conf_level)
-
-        # ── edge strings ──
-        win_edge_pct  = max(win_blue_edge, win_red_edge) * 100
-        ft5_edge_pct  = max(ft5_blue_edge, ft5_red_edge) * 100
-        win_pick_edge = win_blue_edge if blue_win_conf > red_win_conf else win_red_edge
-        ft5_pick_edge = ft5_blue_edge if blue_ft5_conf > red_ft5_conf else ft5_red_edge
-
-        # ── pick recommendation strings ──
-        if win_pick_units > 0:
-            win_rec_str = f"{win_winner} WIN &middot; {win_pick_units}u {win_pick_label.replace('✅ ','').replace('🔥 ','')} &middot; @{win_pick_odds}"
-            win_pick_show = True
-        else:
-            win_rec_str = f"{win_winner} WIN &middot; SKIP (edge only {win_pick_edge*100:.1f}%)"
-            win_pick_show = False
-
-        if ft5_pick_units > 0:
-            ft5_rec_str = f"{ft5_winner} FT5 &middot; {ft5_pick_units}u {ft5_pick_label.replace('✅ ','').replace('🔥 ','')} &middot; @{ft5_pick_odds} &middot; est ~{est_time:.1f} min"
-            ft5_pick_show = True
-        else:
-            ft5_rec_str = f"{ft5_winner} FT5 &middot; SKIP (edge only {ft5_pick_edge*100:.1f}%)"
-            ft5_pick_show = False
-
-        win_pick_color  = '#c0f060' if win_pick_show  else '#4a5a7a'
-        win_pick_bg     = '#0d1f05' if win_pick_show  else '#0f1218'
-        win_pick_border = '#2a5a10' if win_pick_show  else '#1e2535'
-        ft5_pick_color  = '#60a0f0' if ft5_pick_show  else '#4a5a7a'
-        ft5_pick_bg     = '#05101f' if ft5_pick_show  else '#0f1218'
-        ft5_pick_border = '#103a6a' if ft5_pick_show  else '#1e2535'
-
-        # ── draft rows ──
-        def draft_rows_html(picks, players, prefix):
-            if not picks: return '<div style="color:#3a4060;font-size:10px;">No picks entered</div>'
-            rows = ''
-            pos_labels = ['TOP','JNG','MID','ADC','SUP']
-            for i, champ in enumerate(picks):
-                pos   = pos_labels[i] if i < len(pos_labels) else ''
-                agg   = champ_aggression.get(champ, 0.5)
-                tag, tagcol = agg_tag(agg)
-                player = players[i].strip() if i < len(players) and players[i].strip() else ''
-                player_html = f'<span style="color:#5a6a8a;font-size:9px;margin-left:4px;">({player})</span>' if player else ''
-                rows += (
-                    f'<div style="display:grid;grid-template-columns:28px 1fr auto;align-items:center;'
-                    f'gap:5px;padding:2px 0;">'
-                    f'<span style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.06em;">{pos}</span>'
-                    f'<span style="font-size:11px;color:#8090b0;">{champ}{player_html}</span>'
-                    f'<span style="font-size:9px;color:{tagcol};">{tag}</span>'
-                    f'</div>'
-                )
-            return rows
-
-        blue_draft_html = draft_rows_html(blue, blue_players, 'blue')
-        red_draft_html  = draft_rows_html(red,  red_players,  'red')
-
-        # ── league tip ──
-        league_detected = league_str if league_str else get_league(blue_team_norm or red_team_norm)
-        ft5_league_tips = {
-            'LCK':   'LCK FT5: Best model league — +6.9% edge. Red signal especially reliable (69% accuracy).',
-            'LPL':   'LPL FT5: Model not trained on LPL data — use as rough guide only.',
-            'LEC':   'LEC FT5: Weak edge (+3.1%). Only bet with strong red signal or 60%+ confidence.',
-            'LCS':   'LCS FT5: 0% model edge in backtest. Blue baseline (55%) is your main edge.',
-            'CBLOL': 'CBLOL FT5: Solid edge (+3.2%). Red signal reliable (63% accuracy). Blue baseline 54%.',
-        }
-        league_tip = ''
-        for lg_key, tip in ft5_league_tips.items():
-            if lg_key.lower() in (league_detected or '').lower():
-                league_tip = tip
-                break
-
-        # ── strong red signal ──
-        red_signal_html = ''
-        if ft5_strong_red:
-            red_signal_html = (
-                '<div style="background:#1a0505;border-left:2px solid #6a1010;padding:5px 8px;'
-                'border-radius:0 4px 4px 0;font-size:10px;color:#f06060;margin-bottom:8px;">'
-                f'STRONG RED SIGNAL — blue conf {blue_ft5_conf*100:.1f}% (below 48%). '
-                'Backtest: 61% red accuracy. Check odds offer value before betting.'
-                '</div>'
-            )
-
-        # ── caution banners ──
-        win_caution_html = ''
-        if win_caution:
-            win_caution_html = (
-                '<div style="background:#1f1a05;border-left:2px solid #5a4010;padding:5px 8px;'
-                'border-radius:0 4px 4px 0;font-size:10px;color:#c0a040;margin-top:6px;">'
-                '60-65% range — backtest ~57% actual accuracy here, be cautious'
-                '</div>'
-            )
-        ft5_caution_html = ''
-        if ft5_caution:
-            ft5_caution_html = (
-                '<div style="background:#1f1a05;border-left:2px solid #5a4010;padding:5px 8px;'
-                'border-radius:0 4px 4px 0;font-size:10px;color:#c0a040;margin-top:6px;">'
-                '60-65% range — treat with extra caution'
-                '</div>'
-            )
-
-        # ── draft only caption ──
-        draft_win_cap = ''
         if bdw is not None:
-            dw_name = blue_team_name if bdw > rdw else red_team_name
-            draft_win_cap = f'<span style="color:#3a4060;font-size:10px;">Draft-only win: {blue_team_name} {bdw*100:.1f}% vs {red_team_name} {rdw*100:.1f}% &mdash; {dw_name} has better draft</span>'
-        draft_ft5_cap = ''
-        if bdf is not None:
-            df5_name = blue_team_name if bdf > rdf else red_team_name
-            draft_ft5_cap = f'<span style="color:#3a4060;font-size:10px;">Draft-only FT5: {blue_team_name} {bdf*100:.1f}% vs {red_team_name} {rdf*100:.1f}% &mdash; {df5_name} more aggressive draft</span>'
+            dw = "🔵" if bdw > rdw else "🔴"
+            dn = blue_team_name if bdw > rdw else red_team_name
+            st.caption(f"⚖️ Draft-only: 🔵 {bdw*100:.1f}% vs 🔴 {rdw*100:.1f}% — {dw} {dn} has better draft")
 
-        game_lbl_html = f' &mdash; {game_label}' if game_label else ''
+        # Game style stats
+        b_avg_gl  = team_avg_gamelength.get(blue_team_norm, 0)
+        r_avg_gl  = team_avg_gamelength.get(red_team_norm, 0)
+        b_avg_k   = team_avg_kills.get(blue_team_norm, 0)
+        r_avg_k   = team_avg_kills.get(red_team_norm, 0)
+        if b_avg_gl > 0 or r_avg_gl > 0:
+            sc1, sc2 = st.columns(2)
+            with sc1:
+                if b_avg_gl > 0:
+                    b_gl_min = int(b_avg_gl // 60); b_gl_sec = int(b_avg_gl % 60)
+                    st.caption(f"🔵 {blue_team_name} — Avg game: {b_gl_min}:{b_gl_sec:02d} | Avg kills: {b_avg_k:.1f}")
+            with sc2:
+                if r_avg_gl > 0:
+                    r_gl_min = int(r_avg_gl // 60); r_gl_sec = int(r_avg_gl % 60)
+                    st.caption(f"🔴 {red_team_name} — Avg game: {r_gl_min}:{r_gl_sec:02d} | Avg kills: {r_avg_k:.1f}")
+            if b_avg_gl > 0 and r_avg_gl > 0:
+                longer_team  = blue_team_name if b_avg_gl > r_avg_gl else red_team_name
+                shorter_team = red_team_name  if b_avg_gl > r_avg_gl else blue_team_name
+                diff_sec = abs(b_avg_gl - r_avg_gl)
+                diff_min = int(diff_sec // 60); diff_s = int(diff_sec % 60)
+                style_note = f"⏱️ {longer_team} plays {diff_min}:{diff_s:02d} longer on average"
+                total_kills = b_avg_k + r_avg_k
+                if total_kills > 0:
+                    style_note += f" | 💀 Expected total kills: ~{total_kills:.0f}"
+                st.caption(style_note)
 
-        st.markdown(f"""
-<div style="background:#0a0c10;border:1px solid #1e2330;border-radius:10px;padding:16px;
-     font-family:'SF Mono','Fira Code','Consolas',monospace;font-size:12px;margin-top:16px;">
+        st.markdown(f"**📊 Confidence: {win_conf_level}** — {win_conf_desc}")
 
-  <!-- header -->
-  <div style="display:flex;align-items:center;justify-content:space-between;
-              border-bottom:1px solid #1e2535;padding-bottom:10px;margin-bottom:14px;">
-    <div>
-      <span style="color:#c0f060;font-size:13px;font-weight:700;letter-spacing:0.06em;">
-        &#9672; LOL MATCH PREDICTOR v8
-      </span>
-    </div>
-    <span style="background:#1a2a10;color:#6db33f;font-size:10px;padding:2px 8px;
-                 border-radius:3px;border:1px solid #2a4a1a;">
-      {(league_detected or 'N/A').upper()}{game_lbl_html}
-    </span>
-  </div>
+        with st.spinner("Fetching your tracker history..."):
+            win_history = fetch_tracker_history(
+                win_pick_conf, win_conf_level,
+                st.secrets["GOOGLE_WINNER_SHEETS_ID"])
+        if win_history:
+            with st.expander("📈 Your Tracker History (Winner)", expanded=True):
+                st.markdown(format_history(win_history, "Winner"))
 
-  <!-- teams -->
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-    <div>
-      <div style="font-size:15px;font-weight:700;color:#e0e8ff;">{blue_team_name}</div>
-      <div style="color:#3a4a6a;margin-top:2px;font-size:11px;">BLUE SIDE &middot; {b_wr*100:.1f}% WR &middot; form {b_form*100:.0f}%</div>
-    </div>
-    <div style="color:#2a3050;font-size:11px;font-weight:700;padding:0 10px;">VS</div>
-    <div style="text-align:right;">
-      <div style="font-size:15px;font-weight:700;color:#e0e8ff;">{red_team_name}</div>
-      <div style="color:#3a4a6a;margin-top:2px;font-size:11px;">RED SIDE &middot; {r_wr*100:.1f}% WR &middot; form {r_form*100:.0f}%</div>
-    </div>
-  </div>
+        for r in win_reasons: st.write(f"✔ {r}")
+        for w in win_warnings:
+            if "Mixed signals" in w:
+                wr_dir    = f"🔵 {blue_team_name}" if b_wr > r_wr else f"🔴 {red_team_name}"
+                form_dir  = f"🔵 {blue_team_name}" if b_form > r_form else f"🔴 {red_team_name}"
+                champ_dir = f"🔵 {blue_team_name}" if b_champ_wr > r_champ_wr else f"🔴 {red_team_name}"
+                st.write(f"⚠️ Mixed signals — win rate favours {wr_dir} ({abs(b_wr-r_wr)*100:.1f}%), "
+                         f"form favours {form_dir} ({abs(b_form-r_form)*100:.0f}%), "
+                         f"champ quality favours {champ_dir} ({abs(b_champ_wr-r_champ_wr)*100:.1f}%)")
+            elif "Weak signal" in w:
+                st.write(f"⚠️ Weak signals — win rate diff: {abs(b_wr-r_wr)*100:.1f}%, "
+                         f"form diff: {abs(b_form-r_form)*100:.0f}%, "
+                         f"champ diff: {abs(b_champ_wr-r_champ_wr)*100:.1f}%")
+            else:
+                st.write(f"⚠️ {w}")
+        if win_caution:
+            st.warning("60-65% range — backtest shows ~57% actual accuracy here, be cautious")
 
-  <!-- DRAFT -->
-  <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:6px;">DRAFT</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
-    <div style="background:#0f1218;border:1px solid #1e2535;border-left:2px solid #1e4a80;border-radius:5px;padding:8px 10px;">
-      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#2a5a90;margin-bottom:6px;">BLUE &middot; {blue_team_name}</div>
-      {blue_draft_html}
-    </div>
-    <div style="background:#0f1218;border:1px solid #1e2535;border-left:2px solid #801e1e;border-radius:5px;padding:8px 10px;">
-      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#903030;margin-bottom:6px;">RED &middot; {red_team_name}</div>
-      {red_draft_html}
-    </div>
-  </div>
-
-  <!-- MATCH WINNER -->
-  <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:6px;">MATCH WINNER</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px;">
-    <div style="background:#0f1218;border:1px solid #1e2535;border-radius:5px;padding:10px 12px;">
-      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:4px;">BLUE &middot; {blue_team_name}</div>
-      <div style="font-size:22px;font-weight:700;color:#c0f060;line-height:1;">{blue_win_conf*100:.1f}%</div>
-      <div style="margin-top:5px;font-size:10px;color:#3a4a6a;">odds {win_blue_odds} &middot; impl {win_blue_impl*100:.1f}% &middot; edge {'+' if win_blue_edge >= 0 else ''}{win_blue_edge*100:.1f}%</div>
-    </div>
-    <div style="background:#0f1218;border:1px solid #1e2535;border-radius:5px;padding:10px 12px;">
-      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:4px;">RED &middot; {red_team_name}</div>
-      <div style="font-size:22px;font-weight:700;color:#f06060;line-height:1;">{red_win_conf*100:.1f}%</div>
-      <div style="margin-top:5px;font-size:10px;color:#3a4a6a;">odds {win_red_odds} &middot; impl {win_red_impl*100:.1f}% &middot; edge {'+' if win_red_edge >= 0 else ''}{win_red_edge*100:.1f}%</div>
-    </div>
-  </div>
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-    <span style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;">MODEL CONFIDENCE</span>
-    <span style="background:{win_bg};color:{win_fg};border:1px solid {win_br};font-size:9px;padding:2px 8px;border-radius:3px;font-weight:700;letter-spacing:0.08em;">{win_conf_txt}</span>
-    <span style="color:#3a4a6a;font-size:10px;">&mdash; {win_conf_desc}</span>
-  </div>
-  {win_caution_html}
-  <div style="background:{win_pick_bg};border:1px solid {win_pick_border};border-radius:5px;
-              padding:9px 14px;display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
-    <div>
-      <div style="font-size:9px;letter-spacing:0.12em;text-transform:uppercase;
-                  color:{'#4a8020' if win_pick_show else '#3a4a6a'};">RECOMMENDED BET &mdash; MATCH WINNER</div>
-      <div style="font-size:14px;font-weight:700;color:{win_pick_color};margin-top:2px;">{win_rec_str}</div>
-    </div>
-    <span style="background:{win_bg};color:{win_fg};border:1px solid {win_br};font-size:11px;
-                 padding:4px 12px;border-radius:3px;font-weight:700;">{'PICK' if win_pick_show else 'SKIP'}</span>
-  </div>
-  {draft_win_cap}
-
-  <!-- divider -->
-  <div style="border-top:1px solid #1e2535;margin:14px 0;"></div>
-
-  <!-- FIRST TO FIVE -->
-  <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:6px;">FIRST TO FIVE KILLS</div>
-  {red_signal_html}
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px;">
-    <div style="background:#0f1218;border:1px solid #1e2535;border-radius:5px;padding:10px 12px;">
-      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:4px;">BLUE &middot; {blue_team_name}</div>
-      <div style="font-size:22px;font-weight:700;color:#60a0f0;line-height:1;">{blue_ft5_conf*100:.1f}%</div>
-      <div style="margin-top:5px;font-size:10px;color:#3a4a6a;">odds {ft5_blue_odds} &middot; impl {ft5_blue_impl*100:.1f}% &middot; edge {'+' if ft5_blue_edge >= 0 else ''}{ft5_blue_edge*100:.1f}%</div>
-    </div>
-    <div style="background:#0f1218;border:1px solid #1e2535;border-radius:5px;padding:10px 12px;">
-      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:4px;">RED &middot; {red_team_name}</div>
-      <div style="font-size:22px;font-weight:700;color:#f06060;line-height:1;">{red_ft5_conf*100:.1f}%</div>
-      <div style="margin-top:5px;font-size:10px;color:#3a4a6a;">odds {ft5_red_odds} &middot; impl {ft5_red_impl*100:.1f}% &middot; edge {'+' if ft5_red_edge >= 0 else ''}{ft5_red_edge*100:.1f}%</div>
-    </div>
-  </div>
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-    <span style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;">FT5 CONFIDENCE</span>
-    <span style="background:{ft5_bg};color:{ft5_fg};border:1px solid {ft5_br};font-size:9px;padding:2px 8px;border-radius:3px;font-weight:700;letter-spacing:0.08em;">{ft5_conf_txt}</span>
-    <span style="color:#3a4a6a;font-size:10px;">&mdash; {ft5_conf_desc}</span>
-  </div>
-  {ft5_caution_html}
-  <div style="background:{ft5_pick_bg};border:1px solid {ft5_pick_border};border-radius:5px;
-              padding:9px 14px;display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
-    <div>
-      <div style="font-size:9px;letter-spacing:0.12em;text-transform:uppercase;
-                  color:{'#2a6090' if ft5_pick_show else '#3a4a6a'};">RECOMMENDED BET &mdash; FIRST TO FIVE</div>
-      <div style="font-size:14px;font-weight:700;color:{ft5_pick_color};margin-top:2px;">{ft5_rec_str}</div>
-    </div>
-    <span style="background:{ft5_bg};color:{ft5_fg};border:1px solid {ft5_br};font-size:11px;
-                 padding:4px 12px;border-radius:3px;font-weight:700;">{'PICK' if ft5_pick_show else 'SKIP'}</span>
-  </div>
-  {draft_ft5_cap}
-
-  <!-- divider -->
-  <div style="border-top:1px solid #1e2535;margin:14px 0;"></div>
-
-  <!-- GAME STYLE -->
-  <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:8px;">GAME STYLE</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
-    <div style="background:#0f1218;border:1px solid #1e2535;border-radius:5px;padding:10px 12px;">
-      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#2a5a90;margin-bottom:6px;">BLUE &middot; {blue_team_name}</div>
-      <div style="display:flex;justify-content:space-between;align-items:baseline;">
-        <div>
-          <div style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">AVG GAME</div>
-          <div style="font-size:15px;font-weight:700;color:#d0d8f0;">{fmt_gl(b_avg_gl)}</div>
-        </div>
-        <div style="text-align:right;">
-          <div style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">AVG KILLS</div>
-          <div style="font-size:15px;font-weight:700;color:#d0d8f0;">{f"{b_avg_k:.1f}" if b_avg_k else "N/A"}</div>
-        </div>
-      </div>
-    </div>
-    <div style="background:#0f1218;border:1px solid #1e2535;border-radius:5px;padding:10px 12px;">
-      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#903030;margin-bottom:6px;">RED &middot; {red_team_name}</div>
-      <div style="display:flex;justify-content:space-between;align-items:baseline;">
-        <div>
-          <div style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">AVG GAME</div>
-          <div style="font-size:15px;font-weight:700;color:#d0d8f0;">{fmt_gl(r_avg_gl)}</div>
-        </div>
-        <div style="text-align:right;">
-          <div style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">AVG KILLS</div>
-          <div style="font-size:15px;font-weight:700;color:#d0d8f0;">{f"{r_avg_k:.1f}" if r_avg_k else "N/A"}</div>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
-    <div style="background:#0f1218;border-radius:4px;padding:7px 10px;">
-      <div style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">EXP TOTAL KILLS</div>
-      <div style="font-size:12px;font-weight:600;color:#f0c060;">{'~' + str(round(total_kills_est)) if total_kills_est else 'N/A'}</div>
-    </div>
-    <div style="background:#0f1218;border-radius:4px;padding:7px 10px;">
-      <div style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">H2H WIN</div>
-      <div style="font-size:12px;font-weight:600;color:#d0d8f0;">{blue_team_name[:4]} {b_win_h2h}&ndash;{r_win_h2h} {red_team_name[:4]}</div>
-    </div>
-    <div style="background:#0f1218;border-radius:4px;padding:7px 10px;">
-      <div style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">H2H FT5</div>
-      <div style="font-size:12px;font-weight:600;color:#d0d8f0;">{blue_team_name[:4]} {b_ft5_h2h}&ndash;{r_ft5_h2h} {red_team_name[:4]}</div>
-    </div>
-    <div style="background:#0f1218;border-radius:4px;padding:7px 10px;">
-      <div style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">DRAFT-ONLY</div>
-      <div style="font-size:12px;font-weight:600;color:#60a0f0;">{f"{(blue_team_name if bdw and bdw > rdw else red_team_name)[:5]} {max(bdw,rdw)*100:.1f}%" if bdw is not None else 'N/A'}</div>
-    </div>
-  </div>
-
-  {"<div style='background:#0a150a;border-left:2px solid #3a6020;padding:5px 8px;border-radius:0 4px 4px 0;font-size:10px;color:#6a8a50;margin-top:10px;'>" + league_tip + "</div>" if league_tip else ""}
-
-</div>
-""", unsafe_allow_html=True)
-
-        # ── tracker history + signals in expanders ──
-        with st.spinner("Fetching tracker history..."):
-            win_history = fetch_tracker_history(win_pick_conf, win_conf_level, st.secrets["GOOGLE_WINNER_SHEETS_ID"])
-            ft5_history = fetch_tracker_history(ft5_pick_conf, ft5_conf_level, st.secrets["GOOGLE_SHEETS_ID"])
-
-        if win_history or ft5_history:
-            with st.expander("📈 Tracker History", expanded=True):
-                if win_history:
-                    st.markdown("**Winner picks**")
-                    st.markdown(format_history(win_history, "Winner"))
-                if ft5_history:
-                    st.markdown("**FT5 picks**")
-                    st.markdown(format_history(ft5_history, "FT5"))
-
-        with st.expander("📊 Signal Breakdown", expanded=False):
-            st.markdown("**Match Winner signals**")
+        with st.expander("📊 Win Signal Breakdown", expanded=False):
             show_signal("Team win rate",    b_wr,       r_wr,       0.05, 0.15, blue_team_name, red_team_name)
             show_signal("Recent form",      b_form,     r_form,     0.10, 0.25, blue_team_name, red_team_name, ".0f")
             show_signal("Champion quality", b_champ_wr, r_champ_wr, 0.02, 0.06, blue_team_name, red_team_name)
@@ -1463,16 +1143,6 @@ if predict_btn:
             else:
                 st.write("**H2H:** No history — ⚪ Neutral")
             st.write(f"**Blue side:** 53.1% historical — ⚪ Slight edge 🔵 {blue_team_name}")
-            st.markdown("**FT5 signals**")
-            show_signal("Early game rate", b_early,      r_early,      0.05, 0.15, blue_team_name, red_team_name)
-            show_signal("Early form",      b_early_form, r_early_form, 0.10, 0.25, blue_team_name, red_team_name, ".0f")
-            show_signal("Aggression",      b_agg,        r_agg,        0.03, 0.08, blue_team_name, red_team_name)
-            faster   = blue_team_name if b_speed < r_speed else red_team_name
-            spd_diff = abs(b_speed - r_speed)
-            if spd_diff >= 2.0:   spd_str = f"🟢 Strong — {faster} significantly faster"
-            elif spd_diff >= 0.5: spd_str = f"🟡 Moderate — {faster} slightly faster"
-            else:                 spd_str = "⚪ Weak — similar speed"
-            st.write(f"**Kill speed:** 🔵 {b_speed:.1f}m vs 🔴 {r_speed:.1f}m — {spd_str}")
 
         if blue or red:
             with st.expander("🏅 Champion Ratings", expanded=False):
@@ -1484,8 +1154,9 @@ if predict_btn:
                         rc_val  = role_champ_rate.get((pos, champ.strip()), 0.5)
                         pc_val  = pc_rate.get((player.strip(), champ.strip()), 0.5) if player.strip() else rc_val
                         pcg     = pc_games_d.get((player.strip(), champ.strip()), 0) if player.strip() else 0
+                        blended = PC_WEIGHT * pc_val + RC_WEIGHT * rc_val
                         cwr     = win_champ_rate.get(champ, 0.5)
-                        rating  = rate_champ(cwr, PC_WEIGHT * pc_val + RC_WEIGHT * rc_val)
+                        rating  = rate_champ(cwr, blended)
                         lbl     = POS_LABELS[i] if i < len(POS_LABELS) else ''
                         name    = player if player.strip() else "Unknown"
                         gstr    = f"({pcg}g)" if pcg > 0 else ""
@@ -1498,12 +1169,135 @@ if predict_btn:
                         rc_val  = role_champ_rate.get((pos, champ.strip()), 0.5)
                         pc_val  = pc_rate.get((player.strip(), champ.strip()), 0.5) if player.strip() else rc_val
                         pcg     = pc_games_d.get((player.strip(), champ.strip()), 0) if player.strip() else 0
+                        blended = PC_WEIGHT * pc_val + RC_WEIGHT * rc_val
                         cwr     = win_champ_rate.get(champ, 0.5)
-                        rating  = rate_champ(cwr, PC_WEIGHT * pc_val + RC_WEIGHT * rc_val)
+                        rating  = rate_champ(cwr, blended)
                         lbl     = POS_LABELS[i] if i < len(POS_LABELS) else ''
                         name    = player if player.strip() else "Unknown"
                         gstr    = f"({pcg}g)" if pcg > 0 else ""
                         st.write(f"**{lbl}** {name} — {champ}: role {rc_val*100:.0f}% | player {pc_val*100:.0f}% {gstr} → {rating}")
+
+        st.divider()
+
+        st.markdown("### ⚔️ First to Five Kills")
+        ft5_color = "🔵" if blue_ft5_conf > red_ft5_conf else "🔴"
+        st.markdown(f"#### {ft5_color} Model pick: **{ft5_winner}**")
+
+        # Strong red signal
+        if ft5_strong_red:
+            st.error(f"🚨 **STRONG RED SIGNAL** — Model blue confidence {blue_ft5_conf*100:.1f}% "
+                     f"(below 48%). Backtest: red picks in this range are **66% accurate** "
+                     f"with **14.9% ROI**. Trust the unit recommendation below.")
+
+        # League-specific FT5 tips from backtest
+        league_detected = league_str if league_str else get_league(blue_team_norm or red_team_norm)
+        ft5_league_tips = {
+            'LCK':   ("🟢 **LCK FT5:** Best model league — +6.9% edge over always-blue. "
+                      "Red signal especially reliable here (69% red accuracy in backtest)."),
+            'LPL':   ("⚠️ **LPL FT5:** Model not trained on LPL data — use as rough guide only."),
+            'LEC':   ("🟡 **LEC FT5:** Weak edge (+3.1%). Only bet with strong red signal or 60%+ confidence."),
+            'LCS':   ("🔴 **LCS FT5:** 0% model edge in backtest. "
+                      "Blue side baseline (55%) is your main edge — bet selectively."),
+            'CBLOL': ("🟢 **CBLOL FT5:** Solid edge (+3.2%). Red signal reliable (63% accuracy). "
+                      "Blue baseline 54%."),
+            'FST':   ("🟡 **FST FT5:** Small sample. Red signal weak here (25% accuracy in backtest). "
+                      "Favour blue picks."),
+        }
+        for lg_key, tip in ft5_league_tips.items():
+            if lg_key.lower() in (league_detected or '').lower():
+                st.info(tip)
+                break
+
+        st.caption(f"⏱️ Est. ~{est_time:.1f} min ({faster_team} historically faster)")
+        fc1, fc2 = st.columns(2)
+        with fc1:
+            st.metric(f"🔵 {blue_team_name}", f"{blue_ft5_conf*100:.1f}%",
+                      delta=f"Edge: {ft5_blue_edge*100:.1f}%")
+            st.write(f"Odds: {ft5_blue_odds} | Implied: {ft5_blue_impl*100:.1f}%")
+            st.write(odds_label(ft5_blue_odds))
+            if blue_ft5_conf > red_ft5_conf:
+                st.info(f"💰 {ft5_blue_units}u — {ft5_blue_label}" if ft5_blue_units > 0 else "💰 ⛔ SKIP")
+        with fc2:
+            st.metric(f"🔴 {red_team_name}", f"{red_ft5_conf*100:.1f}%",
+                      delta=f"Edge: {ft5_red_edge*100:.1f}%")
+            st.write(f"Odds: {ft5_red_odds} | Implied: {ft5_red_impl*100:.1f}%")
+            st.write(odds_label(ft5_red_odds))
+            if red_ft5_conf > blue_ft5_conf:
+                st.info(f"💰 {ft5_red_units}u — {ft5_red_label}" if ft5_red_units > 0 else "💰 ⛔ SKIP")
+
+        if bdf is not None:
+            df5 = "🔵" if bdf > rdf else "🔴"
+            dn5 = blue_team_name if bdf > rdf else red_team_name
+            st.caption(f"⚖️ Draft-only: 🔵 {bdf*100:.1f}% vs 🔴 {rdf*100:.1f}% — {df5} {dn5} more aggressive draft")
+
+        st.markdown(f"**📊 Confidence: {ft5_conf_level}** — {ft5_conf_desc}")
+
+        with st.spinner("Fetching your FT5 tracker history..."):
+            ft5_history = fetch_tracker_history(
+                ft5_pick_conf, ft5_conf_level,
+                st.secrets["GOOGLE_SHEETS_ID"])
+        if ft5_history:
+            with st.expander("📈 Your Tracker History (FT5)", expanded=True):
+                st.markdown(format_history(ft5_history, "FT5"))
+
+        for r in ft5_reasons: st.write(f"✔ {r}")
+        for w in ft5_warnings:
+            if "Mixed signals" in w:
+                early_dir = f"🔵 {blue_team_name}" if b_early > r_early else f"🔴 {red_team_name}"
+                form_dir  = f"🔵 {blue_team_name}" if b_early_form > r_early_form else f"🔴 {red_team_name}"
+                agg_dir   = f"🔵 {blue_team_name}" if b_agg > r_agg else f"🔴 {red_team_name}"
+                st.write(f"⚠️ Mixed signals — early rate favours {early_dir} ({abs(b_early-r_early)*100:.1f}%), "
+                         f"form favours {form_dir} ({abs(b_early_form-r_early_form)*100:.0f}%), "
+                         f"aggression favours {agg_dir} ({abs(b_agg-r_agg)*100:.1f}%)")
+            elif "Weak signal" in w:
+                st.write(f"⚠️ Weak signals — early rate diff: {abs(b_early-r_early)*100:.1f}%, "
+                         f"form diff: {abs(b_early_form-r_early_form)*100:.0f}%, "
+                         f"aggression diff: {abs(b_agg-r_agg)*100:.1f}%")
+            else:
+                st.write(f"⚠️ {w}")
+        if ft5_caution:
+            st.warning("60-65% range — treat with extra caution")
+
+        with st.expander("📊 FT5 Signal Breakdown", expanded=False):
+            show_signal("Early game rate", b_early,      r_early,      0.05, 0.15, blue_team_name, red_team_name)
+            show_signal("Early form",      b_early_form, r_early_form, 0.10, 0.25, blue_team_name, red_team_name, ".0f")
+            show_signal("Aggression",      b_agg,        r_agg,        0.03, 0.08, blue_team_name, red_team_name)
+            faster   = blue_team_name if b_speed < r_speed else red_team_name
+            spd_diff = abs(b_speed - r_speed)
+            if spd_diff >= 2.0:   spd_str = f"🟢 Strong — {faster} significantly faster"
+            elif spd_diff >= 0.5: spd_str = f"🟡 Moderate — {faster} slightly faster"
+            else:                 spd_str = "⚪ Weak — similar speed"
+            st.write(f"**Kill speed:** 🔵 {b_speed:.1f}m vs 🔴 {r_speed:.1f}m — {spd_str}")
+            if b_ft5_h2h + r_ft5_h2h > 0:
+                h2h_diff  = ft5_h2h_r - 0.5
+                h_str     = "🟢 Strong" if abs(h2h_diff) >= 0.25 else ("🟡 Moderate" if abs(h2h_diff) >= 0.10 else "⚪ Weak")
+                direction = f"favours 🔵 {blue_team_name}" if h2h_diff > 0 else f"favours 🔴 {red_team_name}"
+                st.write(f"**Early H2H:** 🔵 {b_ft5_h2h}–{r_ft5_h2h} 🔴 — {h_str} {direction}")
+            else:
+                st.write("**Early H2H:** No history — ⚪ Neutral")
+
+        if blue or red:
+            with st.expander("🔥 Champion Aggression", expanded=False):
+                if blue:
+                    st.markdown(f"**🔵 {blue_team_name}**")
+                    for i, champ in enumerate(blue):
+                        player = blue_players[i] if i < len(blue_players) else ''
+                        agg    = champ_aggression.get(champ, 0.5)
+                        rating = rate_agg(agg)
+                        lbl    = POS_LABELS[i] if i < len(POS_LABELS) else ''
+                        name   = player if player.strip() else "Unknown"
+                        st.write(f"**{lbl}** {name} — {champ}: {agg*100:.0f}% → {rating}")
+                if red:
+                    st.markdown(f"**🔴 {red_team_name}**")
+                    for i, champ in enumerate(red):
+                        player = red_players[i] if i < len(red_players) else ''
+                        agg    = champ_aggression.get(champ, 0.5)
+                        rating = rate_agg(agg)
+                        lbl    = POS_LABELS[i] if i < len(POS_LABELS) else ''
+                        name   = player if player.strip() else "Unknown"
+                        st.write(f"**{lbl}** {name} — {champ}: {agg*100:.0f}% → {rating}")
+
+        st.divider()
 
         if len(blue) == 5 and len(red) == 5:
             with st.expander("🤖 AI Analysis", expanded=False):
@@ -1529,14 +1323,7 @@ if predict_btn:
         if send_win_sheet:
             status_parts.append("🏆 Winner logged" if winner_sheets_ok is True else "⚠️ Winner sheet failed")
         if status_parts:
-            st.markdown(
-                '<div style="color:#3a4a6a;font-size:0.75rem;font-family:monospace;text-align:center;margin-top:8px;">'
-                + " &nbsp;|&nbsp; ".join(status_parts) + '</div>',
-                unsafe_allow_html=True
-            )
+            st.caption(" | ".join(status_parts))
 
-        st.markdown(
-            '<div style="color:#1e2a1e;font-size:0.72rem;font-family:monospace;text-align:center;margin-top:12px;">'
-            'V8 | Win 67.50% / AUC 0.7172 | FT5 58.56% | Best ROI at 2.30+ odds</div>',
-            unsafe_allow_html=True
-        )
+        st.divider()
+        st.caption("V8 | Win 67.09% / AUC 0.7227 | FT5 57.16% | Best ROI at 2.30+ odds")
