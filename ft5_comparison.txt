@@ -1,0 +1,29 @@
+============================================================
+  FT5 COMPARISON: PROXY vs PRECISE
+============================================================
+Metric                      Proxy      Precise      Delta
+------------------------------------------------------------
+Test games                   1122         1122
+Accuracy                   57.49%       50.71% ++++-6.77%
+AUC                        0.6067       0.5673 +++-0.0393
+Brier (lower=bet)          0.2441       0.2486 ++++0.0045
+Log loss (lower=bet)       0.6815       0.6904 ++++0.0089
+
+CALIBRATION BY BAND (PROXY)
+        Band  Games    Acc%    Exp%    Diff
+  50%-55%     644   54.5%   52.5% +++2.0
+  55%-60%     420   61.9%   56.8% +++5.1
+  60%-65%      40   62.5%   62.2% +++0.3
+  65%-70%      12   41.7%   66.6% +-24.9
+  70%-100%       6   66.7%   74.3% ++-7.6
+
+CALIBRATION BY BAND (PRECISE)
+        Band  Games    Acc%    Exp%    Diff
+  50%-55%     950   49.3%   51.4% ++-2.1
+  55%-60%     162   58.6%   56.4% +++2.3
+  60%-65%       7   57.1%   61.8% ++-4.7
+
+INTERPRETATION:
+  PROXY is comparable or better: -6.77% accuracy, -0.0393 AUC.
+  Recommend: stay on proxy data. The merge work isn't wasted (data is
+  still in the file), but no need to deploy this version.

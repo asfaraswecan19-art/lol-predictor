@@ -1,0 +1,54 @@
+============================================================
+  MERGE REPORT
+============================================================
+Total Oracle games:          8103
+Precise (lolesports):        6062 (74.8%)
+Proxy fallback:              2041 (25.2%)
+No data at all:              0 (0.0%)
+
+Team aliases discovered:     70/94
+
+Sample aliases (Oracle -> lol_code):
+  '100 Thieves' -> '100T'
+  'Anyone's Legend' -> 'AL'
+  'BNK FEARX' -> 'BFX'
+  'Bilibili Gaming' -> 'BLG'
+  'CTBC Flying Oyster' -> 'CFO'
+  'Cloud9' -> 'C9'
+  'DN SOOPers' -> 'DNS'
+  'DRX' -> 'KRX'
+  'Dignitas' -> 'DIG'
+  'Dplus Kia' -> 'DK'
+  'EDward Gaming' -> 'EDG'
+  'Evil Geniuses' -> 'EG'
+  'Excel Esports' -> 'GX'
+  'FURIA' -> 'FUR'
+  'Fluxo' -> 'FX'
+  'FlyQuest' -> 'FLY'
+  'Fnatic' -> 'FNC'
+  'FunPlus Phoenix' -> 'FPX'
+  'G2 Esports' -> 'G2'
+  'GAM Esports' -> 'GAM'
+  'Gen.G' -> 'GEN'
+  'GiantX' -> 'GX'
+  'Golden Guardians' -> 'GG'
+  'HANJIN BRION' -> 'BRO'
+  'Hanwha Life Esports' -> 'HLE'
+
+Teams without alias (24):
+  'Liberty' (72 Oracle dates)
+  'KOI' (36 Oracle dates)
+  'Astralis' (33 Oracle dates)
+  'Counter Logic Gaming' (17 Oracle dates)
+  'DetonatioN FocusMe' (4 Oracle dates)
+  'Shopify Rebellion' (60 Oracle dates)
+  'Estral Esports' (7 Oracle dates)
+  'MGN Vikings Esports' (2 Oracle dates)
+  'Fukuoka SoftBank HAWKS gaming' (2 Oracle dates)
+  'Leviatan' (37 Oracle dates)
+  'LYON' (37 Oracle dates)
+  'Isurus Estral' (17 Oracle dates)
+  'Fluxo W7M' (36 Oracle dates)
+  'Disguised' (37 Oracle dates)
+  'Isurus' (7 Oracle dates)
+  ... and 9 more
