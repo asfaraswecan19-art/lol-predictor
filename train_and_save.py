@@ -576,3 +576,197 @@ print(f"   Blend: {int(PC_WEIGHT*100)}% PC / {int(RC_WEIGHT*100)}% RC | H2H cap:
 print(f"   Win GBM:  n_estimators={best_params['n_estimators']}, max_depth={best_params['max_depth']}, lr={best_params['learning_rate']} (grid searched)")
 print(f"   FT5 GBM:  n_estimators=125, max_depth=1, lr=0.03")
 print(f"   Gold window: {GOLD_WINDOW} games (avg_gd20 + late_scaling)")
+
+# =================================================================
+# TIER 2 MODEL — same pipeline, different data files
+# =================================================================
+T2_DATA  = 'proplay_matches_t2.csv'
+T2_FT5   = 'kill_timelines_t2.csv'
+
+if not os.path.exists(T2_DATA):
+    print(f"\n⚠️  {T2_DATA} not found — skipping tier 2 model")
+    print(f"   Run build_dataset.py first to generate tier 2 data")
+else:
+    print(f"\n{'='*55}")
+    print(f"  TRAINING TIER 2 MODEL")
+    print(f"{'='*55}")
+
+    df_t2 = pd.read_csv(T2_DATA)
+    df_t2['blue_team']    = df_t2['blue_team'].apply(normalize_team)
+    df_t2['red_team']     = df_t2['red_team'].apply(normalize_team)
+    df_t2['blue_picks']   = df_t2['blue_picks'].apply(lambda x: x.split(','))
+    df_t2['red_picks']    = df_t2['red_picks'].apply(lambda x: x.split(','))
+    df_t2['blue_players'] = df_t2['blue_players'].apply(lambda x: str(x).split(','))
+    df_t2['red_players']  = df_t2['red_players'].apply(lambda x: str(x).split(','))
+    if 'date' in df_t2.columns:
+        df_t2['date'] = pd.to_datetime(df_t2['date'], errors='coerce')
+        df_t2 = df_t2.sort_values('date').reset_index(drop=True)
+    if 'year' not in df_t2.columns:
+        df_t2['year'] = df_t2['date'].dt.year
+    df_t2['date_str'] = df_t2['date'].dt.strftime('%Y-%m-%d')
+    print(f"  Loaded {len(df_t2)} tier 2 games")
+
+    # Build role-champ rates for T2
+    rc_wins_t2={}; rc_games_t2={}
+    for _, row in df_t2.iterrows():
+        result = row['blue_win']
+        for i, champ in enumerate(row['blue_picks']):
+            key = (POSITIONS[i] if i < len(POSITIONS) else 'unknown', champ.strip())
+            rc_games_t2[key] = rc_games_t2.get(key, 0) + 1
+            rc_wins_t2[key]  = rc_wins_t2.get(key, 0) + result
+        for i, champ in enumerate(row['red_picks']):
+            key = (POSITIONS[i] if i < len(POSITIONS) else 'unknown', champ.strip())
+            rc_games_t2[key] = rc_games_t2.get(key, 0) + 1
+            rc_wins_t2[key]  = rc_wins_t2.get(key, 0) + (1-result)
+    role_champ_rate_t2 = {k: rc_wins_t2[k]/rc_games_t2[k]
+                          for k in rc_games_t2 if rc_games_t2[k] >= MIN_ROLE_GAMES}
+
+    # Build win features for T2
+    tw2={}; tg2={}; cw2={}; cg2={}; h2h2={}; tr2={}; pw2={}; pg2={}
+    t2_win_rows = []
+    for _, row in df_t2.iterrows():
+        blue, red = row['blue_team'], row['red_team']
+        bp = [c.strip() for c in row['blue_picks']]
+        rp = [c.strip() for c in row['red_picks']]
+        bpl = row['blue_players']; rpl = row['red_players']
+        ds  = row['date_str']
+
+        bg=tg2.get(blue,0); rg=tg2.get(red,0)
+        bwr=tw2.get(blue,0)/bg if bg>0 else 0.5
+        rwr=tw2.get(red,0)/rg  if rg>0 else 0.5
+        bcw=sum(cw2.get(c,0)/cg2[c] if cg2.get(c,0)>0 else 0.5 for c in bp)/len(bp)
+        rcw=sum(cw2.get(c,0)/cg2[c] if cg2.get(c,0)>0 else 0.5 for c in rp)/len(rp)
+        mk=tuple(sorted([blue,red])); hr=h2h2.get(mk,{}); ht=sum(hr.values())
+        h2h_r=cap_h2h(hr.get(blue,0)/ht) if ht>0 else 0.5
+        bh=tr2.get(blue,[]); rh=tr2.get(red,[])
+        b_form=weighted_form(bh,FORM_WINDOW); r_form=weighted_form(rh,FORM_WINDOW)
+        b_rwr=sum(bh[-RECENT_WINDOW:])/len(bh[-RECENT_WINDOW:]) if bh else 0.5
+        r_rwr=sum(rh[-RECENT_WINDOW:])/len(rh[-RECENT_WINDOW:]) if rh else 0.5
+        bpc=[PC_WEIGHT*(pw2.get((pl.strip(),c.strip()),0)/pg2.get((pl.strip(),c.strip()),1)
+             if pg2.get((pl.strip(),c.strip()),0)>=MIN_PC_GAMES else 0.5)
+             +RC_WEIGHT*role_champ_rate_t2.get((POSITIONS[i] if i<len(POSITIONS) else 'unknown',c.strip()),0.5)
+             for i,(pl,c) in enumerate(zip(bpl,bp))]
+        rpc=[PC_WEIGHT*(pw2.get((pl.strip(),c.strip()),0)/pg2.get((pl.strip(),c.strip()),1)
+             if pg2.get((pl.strip(),c.strip()),0)>=MIN_PC_GAMES else 0.5)
+             +RC_WEIGHT*role_champ_rate_t2.get((POSITIONS[i] if i<len(POSITIONS) else 'unknown',c.strip()),0.5)
+             for i,(pl,c) in enumerate(zip(rpl,rp))]
+        bpca=sum(bpc)/len(bpc); rpca=sum(rpc)/len(rpc)
+        bfl=gold_lookup.get((ds,blue),{}); rfl=gold_lookup.get((ds,red),{})
+
+        t2_win_rows.append({
+            'blue_team_winrate':bwr,'red_team_winrate':rwr,'team_winrate_diff':bwr-rwr,
+            'blue_team_games':bg,'red_team_games':rg,
+            'blue_avg_winrate':bcw,'red_avg_winrate':rcw,'winrate_diff':bcw-rcw,
+            'h2h_winrate':h2h_r,
+            'blue_form':b_form,'red_form':r_form,'form_diff':b_form-r_form,
+            'blue_recent_wr':b_rwr,'red_recent_wr':r_rwr,'recent_wr_diff':b_rwr-r_rwr,
+            'blue_side_advantage':BLUE_SIDE_WINRATE,
+            'blue_pc_avg':bpca,'red_pc_avg':rpca,'pc_avg_diff':bpca-rpca,
+            'blue_avg_gd20':bfl.get('avg_gd20',0.0),'red_avg_gd20':rfl.get('avg_gd20',0.0),
+            'gd20_diff':bfl.get('avg_gd20',0.0)-rfl.get('avg_gd20',0.0),
+            'blue_late_scaling':bfl.get('late_scaling',0.0),'red_late_scaling':rfl.get('late_scaling',0.0),
+            'late_scaling_diff':bfl.get('late_scaling',0.0)-rfl.get('late_scaling',0.0),
+            'year':row['year'],
+        })
+
+        result=row['blue_win']
+        tg2[blue]=tg2.get(blue,0)+1; tg2[red]=tg2.get(red,0)+1
+        tw2[blue]=tw2.get(blue,0)+result; tw2[red]=tw2.get(red,0)+(1-result)
+        for c in bp: cg2[c]=cg2.get(c,0)+1; cw2[c]=cw2.get(c,0)+result
+        for c in rp: cg2[c]=cg2.get(c,0)+1; cw2[c]=cw2.get(c,0)+(1-result)
+        if mk not in h2h2: h2h2[mk]={}
+        h2h2[mk][blue]=h2h2[mk].get(blue,0)+result; h2h2[mk][red]=h2h2[mk].get(red,0)+(1-result)
+        if blue not in tr2: tr2[blue]=[]
+        if red  not in tr2: tr2[red]=[]
+        tr2[blue].append(1 if result==1 else 0); tr2[red].append(0 if result==1 else 1)
+        for pl,c in zip(bpl,bp):
+            key=(pl.strip(),c.strip()); pg2[key]=pg2.get(key,0)+1; pw2[key]=pw2.get(key,0)+result
+        for pl,c in zip(rpl,rp):
+            key=(pl.strip(),c.strip()); pg2[key]=pg2.get(key,0)+1; pw2[key]=pw2.get(key,0)+(1-result)
+
+    t2_feat = pd.DataFrame(t2_win_rows).reset_index(drop=True)
+    t2_y    = df_t2['blue_win'].reset_index(drop=True)
+
+    t2_mlb = MultiLabelBinarizer()
+    t2_mlb.fit((df_t2['blue_picks']+df_t2['red_picks']).tolist())
+    t2_blue_enc = pd.DataFrame(t2_mlb.transform(df_t2['blue_picks']),
+        columns=['blue_'+c for c in t2_mlb.classes_]).reset_index(drop=True)
+    t2_red_enc  = pd.DataFrame(t2_mlb.transform(df_t2['red_picks']),
+        columns=['red_' +c for c in t2_mlb.classes_]).reset_index(drop=True)
+    t2_feat_cols = [c for c in t2_feat.columns if c != 'year']
+    t2_X = pd.concat([t2_blue_enc, t2_red_enc, t2_feat[t2_feat_cols]], axis=1)
+
+    # Grid search for T2
+    t2_val  = t2_feat['year'] == 2025
+    t2_tr   = t2_feat['year'] <= 2024
+    t2_train= t2_feat['year'] <= 2025
+
+    t2_best_auc=0; t2_best_params={'n_estimators':125,'max_depth':2,'learning_rate':0.1}
+    if t2_tr.sum()>50 and t2_val.sum()>20:
+        print(f"  Grid search for T2 win model...")
+        for params in [
+            {'n_estimators':125,'max_depth':2,'learning_rate':0.1},
+            {'n_estimators':200,'max_depth':2,'learning_rate':0.05},
+            {'n_estimators':150,'max_depth':2,'learning_rate':0.08},
+        ]:
+            m=GradientBoostingClassifier(**params,random_state=42)
+            m.fit(t2_X[t2_tr],t2_y[t2_tr])
+            pr=m.predict_proba(t2_X[t2_val])[:,1]
+            from sklearn.metrics import roc_auc_score as _auc2
+            a=_auc2(t2_y[t2_val],pr)
+            marker=' ← best' if a>t2_best_auc else ''
+            print(f"    est={params['n_estimators']} depth={params['max_depth']} lr={params['learning_rate']} → AUC:{a:.4f}{marker}")
+            if a>t2_best_auc: t2_best_auc=a; t2_best_params=params
+
+    print(f"  Training T2 win model (best params: {t2_best_params})...")
+    t2_win_base  = GradientBoostingClassifier(**t2_best_params, random_state=42)
+    t2_win_model = CalibratedClassifierCV(t2_win_base, method='isotonic', cv=5)
+    t2_win_model.fit(t2_X[t2_train], t2_y[t2_train])
+    print(f"  ✅ T2 win model trained on {t2_train.sum()} games")
+
+    # T2 team/champ lookups
+    t2_all_teams = sorted(set(df_t2['blue_team'].tolist()+df_t2['red_team'].tolist()))
+    t2_all_champs = sorted(set(
+        [c for picks in df_t2['blue_picks'].tolist()+df_t2['red_picks'].tolist() for c in picks]))
+    t2_team_recent = {t: tr2[t] for t in tr2}
+    t2_team_games  = {t: tg2[t] for t in tg2}
+    t2_team_wins_d = {t: tw2[t] for t in tw2}
+    t2_h2h         = h2h2
+    t2_pc_rate     = {k: pw2[k]/pg2[k] for k in pg2 if pg2[k]>=MIN_PC_GAMES}
+
+    # Build T2 payload (win model only — FT5 optional)
+    t2_payload = {
+        'win_model':        t2_win_model,
+        'win_mlb':          t2_mlb,
+        'win_team_rate':    {t: tw2[t]/tg2[t] if tg2[t]>0 else 0.5 for t in tg2},
+        'win_team_games':   tg2,
+        'win_champ_rate':   {c: cw2[c]/cg2[c] for c in cg2 if cg2[c]>0},
+        'win_h2h':          h2h2,
+        'win_team_recent':  tr2,
+        'pc_rate':          t2_pc_rate,
+        'pc_games':         pg2,
+        'role_champ_rate':  role_champ_rate_t2,
+        'pc_weight':        PC_WEIGHT,
+        'rc_weight':        RC_WEIGHT,
+        'h2h_cap':          H2H_CAP,
+        'min_pc_games':     MIN_PC_GAMES,
+        'form_window':      FORM_WINDOW,
+        'recent_window':    RECENT_WINDOW,
+        'recent_weight':    RECENT_WEIGHT,
+        'gold_window':      GOLD_WINDOW,
+        'gold_lookup':      gold_lookup,
+        'team_avg_gamelength': team_avg_gamelength,
+        'team_avg_kills':      team_avg_kills,
+        'all_teams':        t2_all_teams,
+        'all_champs':       t2_all_champs,
+        'team_aliases':     TEAM_ALIASES,
+        'tier':             'T2',
+        'leagues':          ['LCKC','LFL','EM','PRM'],
+    }
+
+    with open('model_payload_t2.pkl', 'wb') as f:
+        pickle.dump(t2_payload, f)
+    size_t2 = os.path.getsize('model_payload_t2.pkl') / (1024*1024)
+    print(f"\n✅ Saved model_payload_t2.pkl ({size_t2:.1f} MB)")
+    print(f"   Teams: {len(t2_all_teams)} | Champions: {len(t2_all_champs)}")
+    print(f"   Win GBM: {t2_best_params} (grid searched)")
