@@ -734,6 +734,83 @@ else:
     t2_h2h         = h2h2
     t2_pc_rate     = {k: pw2[k]/pg2[k] for k in pg2 if pg2[k]>=MIN_PC_GAMES}
 
+    # ── TIER 2 FT5 MODEL ──────────────────────────────────────────
+    t2_ft5_available = False
+    if os.path.exists(T2_FT5):
+        print(f"\n  Training T2 FT5 model...")
+        ft5_t2 = pd.read_csv(T2_FT5)
+        ft5_t2['blue_team'] = ft5_t2['blue_team'].apply(normalize_team)
+        ft5_t2['red_team']  = ft5_t2['red_team'].apply(normalize_team)
+        ft5_t2['blue_picks'] = ft5_t2['blue_picks'].apply(lambda x: x.split(','))
+        ft5_t2['red_picks']  = ft5_t2['red_picks'].apply(lambda x: x.split(','))
+        ft5_t2['first_to_five_binary'] = ft5_t2['first_to_five'].apply(lambda x: 1 if x=='blue' else 0)
+        if 'is_ambiguous' in ft5_t2.columns:
+            ft5_t2['is_ambiguous'] = ft5_t2['is_ambiguous'].fillna(0).astype(int)
+        else:
+            ft5_t2['is_ambiguous'] = 0
+        if 'year' not in ft5_t2.columns:
+            ft5_t2['year'] = 2024
+
+        # Build FT5 features
+        ce_agg={}; ce_agg_g={}; te_early={}; te_early_g={}
+        f_h2h={}; f_recent={}; f_speed={}; f_speed_c={}
+        ft5_rows_t2=[]
+        for _, row in ft5_t2.iterrows():
+            bt,rt=row['blue_team'],row['red_team']
+            bp=[c.strip() for c in row['blue_picks']]; rp=[c.strip() for c in row['red_picks']]
+            b_early=te_early.get(bt,0)/te_early_g[bt] if te_early_g.get(bt,0)>0 else 0.5
+            r_early=te_early.get(rt,0)/te_early_g[rt] if te_early_g.get(rt,0)>0 else 0.5
+            b_agg=sum(ce_agg.get(c,0)/ce_agg_g[c] if ce_agg_g.get(c,0)>0 else 0.5 for c in bp)/len(bp)
+            r_agg=sum(ce_agg.get(c,0)/ce_agg_g[c] if ce_agg_g.get(c,0)>0 else 0.5 for c in rp)/len(rp)
+            mk=tuple(sorted([bt,rt])); hr=f_h2h.get(mk,{}); ht=sum(hr.values())
+            h2h_r=cap_h2h(hr.get(bt,0)/ht) if ht>0 else 0.5
+            b_form=weighted_form(f_recent.get(bt,[]),FORM_WINDOW)
+            r_form=weighted_form(f_recent.get(rt,[]),FORM_WINDOW)
+            b_speed=f_speed.get(bt,0)/f_speed_c[bt] if f_speed_c.get(bt,0)>0 else 10.0
+            r_speed=f_speed.get(rt,0)/f_speed_c[rt] if f_speed_c.get(rt,0)>0 else 10.0
+            ft5_rows_t2.append({
+                'blue_aggression':b_agg,'red_aggression':r_agg,'aggression_diff':b_agg-r_agg,
+                'blue_early_rate':b_early,'red_early_rate':r_early,'early_rate_diff':b_early-r_early,
+                'blue_kill_speed':b_speed,'red_kill_speed':r_speed,'speed_diff':r_speed-b_speed,
+                'h2h_early_rate':h2h_r,
+                'blue_early_form':b_form,'red_early_form':r_form,'early_form_diff':b_form-r_form,
+            })
+            result=row['first_to_five_binary']
+            te_early_g[bt]=te_early_g.get(bt,0)+1; te_early_g[rt]=te_early_g.get(rt,0)+1
+            te_early[bt]=te_early.get(bt,0)+result; te_early[rt]=te_early.get(rt,0)+(1-result)
+            for c in bp: ce_agg_g[c]=ce_agg_g.get(c,0)+1; ce_agg[c]=ce_agg.get(c,0)+result
+            for c in rp: ce_agg_g[c]=ce_agg_g.get(c,0)+1; ce_agg[c]=ce_agg.get(c,0)+(1-result)
+            if mk not in f_h2h: f_h2h[mk]={}
+            f_h2h[mk][bt]=f_h2h[mk].get(bt,0)+result; f_h2h[mk][rt]=f_h2h[mk].get(rt,0)+(1-result)
+            if bt not in f_recent: f_recent[bt]=[]
+            if rt not in f_recent: f_recent[rt]=[]
+            f_recent[bt].append(result); f_recent[rt].append(1-result)
+            btime=row.get('blue_time',0); rtime=row.get('red_time',0)
+            if btime>0: f_speed[bt]=f_speed.get(bt,0)+btime; f_speed_c[bt]=f_speed_c.get(bt,0)+1
+            if rtime>0: f_speed[rt]=f_speed.get(rt,0)+rtime; f_speed_c[rt]=f_speed_c.get(rt,0)+1
+
+        ft5_feat_t2 = pd.DataFrame(ft5_rows_t2).reset_index(drop=True)
+        ft5_y_t2 = ft5_t2['first_to_five_binary'].reset_index(drop=True)
+
+        ft5_mlb_t2 = MultiLabelBinarizer()
+        ft5_mlb_t2.fit((ft5_t2['blue_picks']+ft5_t2['red_picks']).tolist())
+        ft5_be_t2 = pd.DataFrame(ft5_mlb_t2.transform(ft5_t2['blue_picks']),
+            columns=['blue_'+c for c in ft5_mlb_t2.classes_]).reset_index(drop=True)
+        ft5_re_t2 = pd.DataFrame(ft5_mlb_t2.transform(ft5_t2['red_picks']),
+            columns=['red_'+c for c in ft5_mlb_t2.classes_]).reset_index(drop=True)
+        ft5_X_t2 = pd.concat([ft5_be_t2, ft5_re_t2, ft5_feat_t2], axis=1)
+
+        ft5_train_t2 = ft5_t2['is_ambiguous']==0
+        ft5_base_t2  = GradientBoostingClassifier(n_estimators=125, max_depth=1, learning_rate=0.03, random_state=42)
+        ft5_model_t2 = CalibratedClassifierCV(ft5_base_t2, method='isotonic', cv=5)
+        ft5_model_t2.fit(ft5_X_t2[ft5_train_t2], ft5_y_t2[ft5_train_t2])
+        print(f"  ✅ T2 FT5 model trained on {ft5_train_t2.sum()} non-ambiguous games")
+
+        t2_champ_aggression = {c: ce_agg[c]/ce_agg_g[c] for c in ce_agg_g if ce_agg_g[c]>0}
+        t2_team_early_rate  = {t: te_early[t]/te_early_g[t] for t in te_early_g if te_early_g[t]>0}
+        t2_team_kill_speed  = {t: f_speed[t]/f_speed_c[t] for t in f_speed_c if f_speed_c[t]>0}
+        t2_ft5_available = True
+
     # Build T2 payload (win model only — FT5 optional)
     t2_payload = {
         'win_model':        t2_win_model,
@@ -763,6 +840,21 @@ else:
         'tier':             'T2',
         'leagues':          ['LCKC','LFL','EM','PRM'],
     }
+
+    # Add FT5 to T2 payload if available
+    if t2_ft5_available:
+        t2_payload.update({
+            'ft5_model':        ft5_model_t2,
+            'ft5_mlb':          ft5_mlb_t2,
+            'champ_aggression': t2_champ_aggression,
+            'team_early_rate':  t2_team_early_rate,
+            'team_kill_speed':  t2_team_kill_speed,
+            'ft5_h2h':          f_h2h,
+            'ft5_team_recent':  f_recent,
+            'ft5_team_games':   te_early_g,
+            'team_lineups':     {},
+        })
+        print(f"  ✅ T2 FT5 added to payload")
 
     with open('model_payload_t2.pkl', 'wb') as f:
         pickle.dump(t2_payload, f)
