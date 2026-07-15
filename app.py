@@ -279,6 +279,12 @@ with st.spinner("Loading models..."):
     p_t1 = load_models()
     p_t2 = load_models_t2()
 
+# Fallback values — overridden after model loads at line ~351
+BACKTEST_WIN_ACC    = 67.09
+BACKTEST_WIN_AUC    = 0.7227
+BACKTEST_FT5_ACC    = 57.16
+BACKTEST_STATS_LIVE = False
+
 stale_note = '' if BACKTEST_STATS_LIVE else ' <span style="color:#5a4010;">(last hand-verified)</span>'
 st.markdown(f'''
 <div style="border-bottom:1px solid #1e2535;padding-bottom:10px;margin-bottom:8px;">
