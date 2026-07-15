@@ -56,6 +56,11 @@ st.markdown("""
   .stTextInput > div > div, .stTextArea > div > div, .stNumberInput > div > div {
     border: none !important; box-shadow: none !important; background: transparent !important;
   }
+  /* Force dark bg on all BaseWeb textarea wrappers */
+  .stTextArea, .stTextArea > div, .stTextArea > div > div,
+  .stTextArea [data-baseweb="textarea"],
+  .stTextArea [data-baseweb="base-input"],
+  textarea { background: #0f1218 !important; }
   .stNumberInput > div > div > div { background: #0f1218 !important; }
   button[data-testid="stNumberInputStepDown"],
   button[data-testid="stNumberInputStepUp"] {
