@@ -30,11 +30,21 @@ st.markdown("""
   .stNumberInput > div > div > input {
     background: #0f1218 !important;
     border: 1px solid #2a3050 !important;
-    color: #d0d8f0 !important;
+    color: #e8eeff !important;
+    -webkit-text-fill-color: #e8eeff !important;
     border-radius: 6px !important;
     outline: none !important;
     box-shadow: none !important;
     font-family: 'SF Mono','Fira Code','Consolas',monospace !important;
+    font-size: 13px !important;
+  }
+  .stTextArea > div > div > textarea::placeholder {
+    color: #3a4a6a !important;
+    -webkit-text-fill-color: #3a4a6a !important;
+  }
+  .stTextInput > div > div > input::placeholder {
+    color: #3a4a6a !important;
+    -webkit-text-fill-color: #3a4a6a !important;
   }
   .stTextInput > div > div > input:focus,
   .stTextArea > div > div > textarea:focus,
@@ -46,6 +56,11 @@ st.markdown("""
   .stTextInput > div > div, .stTextArea > div > div, .stNumberInput > div > div {
     border: none !important; box-shadow: none !important; background: transparent !important;
   }
+  /* Force dark bg on all BaseWeb textarea wrappers */
+  .stTextArea, .stTextArea > div, .stTextArea > div > div,
+  .stTextArea [data-baseweb="textarea"],
+  .stTextArea [data-baseweb="base-input"],
+  textarea { background: #0f1218 !important; }
   .stNumberInput > div > div > div { background: #0f1218 !important; }
   button[data-testid="stNumberInputStepDown"],
   button[data-testid="stNumberInputStepUp"] {
@@ -101,13 +116,6 @@ st.markdown("""
   div[data-testid="stAlert"] { border-radius: 5px !important; font-family: 'SF Mono','Fira Code',monospace !important; font-size: 0.82rem !important; }
 </style>
 """, unsafe_allow_html=True)
-
-st.markdown('''
-<div style="border-bottom:1px solid #1e2535;padding-bottom:10px;margin-bottom:8px;">
-  <span style="color:#c0f060;font-size:1.3rem;font-weight:700;font-family:'SF Mono',monospace;letter-spacing:0.06em;">&#9672; LOL MATCH PREDICTOR v8</span>
-  <span style="color:#3a4a6a;font-size:0.72rem;font-family:'SF Mono',monospace;margin-left:12px;">Win ~67.09% / AUC 0.7227 &middot; FT5 57.16% &middot; Grid search &middot; Gold trajectory</span>
-</div>
-''', unsafe_allow_html=True)
 
 FORM_WINDOW       = 8
 RECENT_WINDOW     = 20
@@ -276,6 +284,12 @@ with st.spinner("Loading models..."):
     p_t1 = load_models()
     p_t2 = load_models_t2()
 
+# The header shows backtest stats, but those depend on WHICH payload loads
+# (T1 vs T2), and the tier selector + model load happen below. So we reserve
+# the slot here and fill it after the payload is known -- otherwise the
+# Tier 2 tab would display T1's numbers.
+_header_slot = st.empty()
+
 st.markdown('<span style="color:#3a6a20;font-size:0.75rem;font-family:monospace;">&#9654; MODELS LOADED</span>', unsafe_allow_html=True)
 
 # ── Tier selector ──
@@ -317,7 +331,7 @@ team_avg_kills       = p.get('team_avg_kills', {})
 ft5_h2h          = p['ft5_h2h']
 ft5_team_recent  = p['ft5_team_recent']
 ft5_team_games   = p['ft5_team_games']
-team_lineups     = p['team_lineups']
+team_lineups     = p.get('team_lineups', {})
 all_teams        = p['all_teams']
 all_champs       = p['all_champs']
 PC_WEIGHT        = p.get('pc_weight', 0.10)
@@ -325,6 +339,75 @@ RC_WEIGHT        = p.get('rc_weight', 0.90)
 H2H_CAP          = p.get('h2h_cap',  0.60)
 gold_lookup      = p.get('gold_lookup', {})
 GOLD_WINDOW      = p.get('gold_window', 15)
+
+# ── Data-driven fallback defaults (falls back to fixed literals if the
+#    payload doesn't carry these yet) ──
+GLOBAL_AVG_SPEED        = p.get('global_avg_kill_speed', 10.0)
+GLOBAL_AVG_GD20         = p.get('global_avg_gd20', 0.0)
+GLOBAL_AVG_LATE_SCALING = p.get('global_avg_late_scaling', 0.0)
+GLOBAL_AVG_WINRATE      = p.get('global_avg_winrate', 0.5)
+
+# ── Backtest stats: read from payload if present, else fall back to the
+#    last hand-verified numbers. Once train_and_save.py starts saving these
+#    keys, the UI updates itself on every retrain instead of needing a
+#    manual string edit. ──
+# Fallbacks are TIER-SPECIFIC: T1's hand-verified numbers are meaningless
+# for T2, so a T2 payload without live stats falls back to T2's own last
+# known figures (and is marked as unverified).
+if use_t2:
+    _fb_win_acc, _fb_win_auc, _fb_ft5_acc = 69.83, 0.7471, 54.50
+else:
+    _fb_win_acc, _fb_win_auc, _fb_ft5_acc = 67.09, 0.7227, 57.16
+
+BACKTEST_WIN_ACC  = p.get('backtest_win_acc',  _fb_win_acc)
+BACKTEST_WIN_AUC  = p.get('backtest_win_auc',  _fb_win_auc)
+BACKTEST_FT5_ACC  = p.get('backtest_ft5_acc',  _fb_ft5_acc)
+BACKTEST_LEAGUE_EDGES = p.get('backtest_ft5_league_edges', None)  # FT5 tips: {league: str}
+BACKTEST_WIN_LEAGUE_EDGES = p.get('backtest_win_league_edges', None)  # T2 win tips: {league: str}
+BACKTEST_STATS_LIVE = any(k in p for k in
+    ('backtest_win_acc', 'backtest_win_auc', 'backtest_ft5_acc'))
+
+# ── Render the header now that we know which payload loaded ──
+_stale_note = '' if BACKTEST_STATS_LIVE else ' <span style="color:#5a4010;">(last hand-verified)</span>'
+_tier_label = 'T2' if use_t2 else 'T1'
+_ft5_txt = f" &middot; FT5 {BACKTEST_FT5_ACC:.2f}%"
+_header_slot.markdown(f'''
+<div style="border-bottom:1px solid #1e2535;padding-bottom:10px;margin-bottom:8px;">
+  <span style="color:#c0f060;font-size:1.3rem;font-weight:700;font-family:'SF Mono',monospace;letter-spacing:0.06em;">&#9672; LOL MATCH PREDICTOR v8 &middot; {_tier_label}</span>
+  <span style="color:#3a4a6a;font-size:0.72rem;font-family:'SF Mono',monospace;margin-left:12px;">Win ~{BACKTEST_WIN_ACC:.2f}% / AUC {BACKTEST_WIN_AUC:.4f}{_ft5_txt}{_stale_note} &middot; Grid search &middot; Gold trajectory</span>
+</div>
+''', unsafe_allow_html=True)
+
+# ── Feature-order safety net ──
+# win_extra / ft5_extra columns below are hand-typed and MUST match the
+# order train_and_save.py used when fitting the model. If they ever drift
+# apart, sklearn's feature-name check (when available) will raise instead
+# of silently predicting on misaligned columns. This makes that failure
+# LOUD in the UI instead of a silent bad prediction.
+def verify_feature_order(model, df, model_label):
+    expected = getattr(model, 'feature_names_in_', None)
+    if expected is None:
+        return  # older sklearn / model without the attribute -- can't check
+    expected = list(expected)
+    actual = list(df.columns)
+    if expected != actual:
+        st.error(
+            f"FEATURE MISMATCH in {model_label} model -- predictions below "
+            "are NOT reliable. The columns app.py builds no longer match "
+            "what the model was trained on. This usually means "
+            "train_and_save.py's feature order changed without app.py "
+            "being updated to match."
+        )
+        missing = set(expected) - set(actual)
+        extra   = set(actual) - set(expected)
+        if missing:
+            st.caption(f"Model expects but app.py didn't provide: {sorted(missing)}")
+        if extra:
+            st.caption(f"app.py provided but model doesn't expect: {sorted(extra)}")
+        if not missing and not extra:
+            st.caption("Same columns, different ORDER -- this is the dangerous "
+                       "silent-failure case if the model doesn't enforce names.")
+        st.stop()
 
 POSITIONS  = ['top', 'jng', 'mid', 'adc', 'sup']
 POS_LABELS = ['Top', 'Jng', 'Mid', 'ADC', 'Sup']
@@ -335,43 +418,50 @@ CHAMP_LOOKUP = {
 }
 
 def fuzzy_match_champion(raw, threshold=0.6):
-    if not raw or not raw.strip(): return None
+    """Returns (matched_name, was_exact) or (None, False)."""
+    if not raw or not raw.strip(): return None, False
     clean = raw.strip().lower().replace("'","").replace(" ","").replace("&","").replace(".","").replace("-","")
-    if clean in CHAMP_LOOKUP: return CHAMP_LOOKUP[clean]
+    if clean in CHAMP_LOOKUP: return CHAMP_LOOKUP[clean], True
     matches = difflib.get_close_matches(clean, CHAMP_LOOKUP.keys(), n=1, cutoff=threshold)
-    return CHAMP_LOOKUP[matches[0]] if matches else None
+    return (CHAMP_LOOKUP[matches[0]], False) if matches else (None, False)
 
 def fuzzy_match_team(raw):
-    if not raw or not raw.strip(): return None
+    """Returns (matched_name, was_exact) or (None, False)."""
+    if not raw or not raw.strip(): return None, False
     raw_strip = raw.strip()
     normed = normalize_team(raw_strip)
-    if normed != raw_strip and normed in all_teams: return normed
+    if normed != raw_strip and normed in all_teams: return normed, True
     for t in all_teams:
-        if raw_strip.lower() == t.lower(): return t
+        if raw_strip.lower() == t.lower(): return t, True
     raw_clean = raw_strip.lower().replace(" ","")
     team_map  = {t.lower().replace(" ",""): t for t in all_teams}
     matches   = difflib.get_close_matches(raw_clean, team_map.keys(), n=1, cutoff=0.7)
-    return team_map[matches[0]] if matches else None
+    return (team_map[matches[0]], False) if matches else (None, False)
 
 def parse_champion_input(text):
-    if not text or not text.strip(): return []
+    """Returns (champs: list[str], fuzzy_flags: list[bool]) -- fuzzy_flags[i]
+    is True if champs[i] was a non-exact (guessed) match, so the UI can
+    warn the user to double-check it instead of showing an identical
+    checkmark for exact and fuzzy matches alike."""
+    if not text or not text.strip(): return [], []
     parts = re.split(r'[\t,]+', text.strip())
     if len(parts) < 5: parts = re.split(r'\s+', text.strip())
     champs = []
+    fuzzy_flags = []
     i = 0
     while i < len(parts) and len(champs) < 5:
         word = parts[i].strip()
         if not word: i += 1; continue
-        match = fuzzy_match_champion(word)
-        if match: champs.append(match); i += 1; continue
+        match, exact = fuzzy_match_champion(word)
+        if match: champs.append(match); fuzzy_flags.append(not exact); i += 1; continue
         if i + 1 < len(parts):
-            m2 = fuzzy_match_champion(word + " " + parts[i+1].strip())
-            if m2: champs.append(m2); i += 2; continue
+            m2, exact2 = fuzzy_match_champion(word + " " + parts[i+1].strip())
+            if m2: champs.append(m2); fuzzy_flags.append(not exact2); i += 2; continue
         if i + 2 < len(parts):
-            m3 = fuzzy_match_champion(word + " " + parts[i+1].strip() + " " + parts[i+2].strip())
-            if m3: champs.append(m3); i += 3; continue
+            m3, exact3 = fuzzy_match_champion(word + " " + parts[i+1].strip() + " " + parts[i+2].strip())
+            if m3: champs.append(m3); fuzzy_flags.append(not exact3); i += 3; continue
         i += 1
-    return champs
+    return champs, fuzzy_flags
 
 defaults = {
     'blue_team_input': '', 'red_team_input': '',
@@ -417,7 +507,7 @@ def get_recent_wr(recent_dict, team):
     return sum(h) / len(h) if h else 0.5
 
 def get_gold_features(team_name, match_date=None):
-    if not team_name: return 0.0, 0.0
+    if not team_name: return GLOBAL_AVG_GD20, GLOBAL_AVG_LATE_SCALING
     from datetime import datetime, timedelta
     if match_date is None:
         match_date = datetime.now().strftime('%Y-%m-%d')
@@ -427,8 +517,10 @@ def get_gold_features(team_name, match_date=None):
         key = (ds, team_name)
         if key in gold_lookup:
             entry = gold_lookup[key]
-            return entry.get('avg_gd20', 0.0), entry.get('late_scaling', 0.0)
-    return 0.0, 0.0
+            return entry.get('avg_gd20', GLOBAL_AVG_GD20), entry.get('late_scaling', GLOBAL_AVG_LATE_SCALING)
+    # known team, but no gold_lookup entry within the window -- fall back
+    # to the dataset average rather than a hardcoded 0.0
+    return GLOBAL_AVG_GD20, GLOBAL_AVG_LATE_SCALING
 
 def odds_label(odds):
     if odds < 1.60:    return "Low odds"
@@ -489,7 +581,9 @@ def get_draft_only_prediction(blue, red, b_champ_wr, r_champ_wr, b_pc_avg, r_pc_
         'blue_avg_gd20','red_avg_gd20','gd20_diff',
         'blue_late_scaling','red_late_scaling','late_scaling_diff',
     ])
-    win_prob = win_model.predict_proba(pd.concat([b_win_enc, r_win_enc, neutral_row], axis=1))[0]
+    _draft_win_df = pd.concat([b_win_enc, r_win_enc, neutral_row], axis=1)
+    verify_feature_order(win_model, _draft_win_df, "draft-only Win")
+    win_prob = win_model.predict_proba(_draft_win_df)[0]
     b_ft5_enc = pd.DataFrame(ft5_mlb.transform([blue]),
         columns=['blue_' + c for c in ft5_mlb.classes_])
     r_ft5_enc = pd.DataFrame(ft5_mlb.transform([red]),
@@ -498,7 +592,7 @@ def get_draft_only_prediction(blue, red, b_champ_wr, r_champ_wr, b_pc_avg, r_pc_
     r_agg = sum(champ_aggression.get(c, 0.5) for c in red)  / len(red)
     neutral_ft5 = pd.DataFrame([[
         b_agg, r_agg, b_agg-r_agg,
-        0.5, 0.5, 0.0, 10.0, 10.0, 0.0,
+        0.5, 0.5, 0.0, GLOBAL_AVG_SPEED, GLOBAL_AVG_SPEED, 0.0,
         0.5, 0.5, 0.5, 0.0,
     ]], columns=[
         'blue_aggression','red_aggression','aggression_diff',
@@ -506,7 +600,9 @@ def get_draft_only_prediction(blue, red, b_champ_wr, r_champ_wr, b_pc_avg, r_pc_
         'blue_kill_speed','red_kill_speed','speed_diff',
         'h2h_early_rate','blue_early_form','red_early_form','early_form_diff',
     ])
-    ft5_prob = ft5_model.predict_proba(pd.concat([b_ft5_enc, r_ft5_enc, neutral_ft5], axis=1))[0]
+    _draft_ft5_df = pd.concat([b_ft5_enc, r_ft5_enc, neutral_ft5], axis=1)
+    verify_feature_order(ft5_model, _draft_ft5_df, "draft-only FT5")
+    ft5_prob = ft5_model.predict_proba(_draft_ft5_df)[0]
     bw = min(max(win_prob[1], 0.05), 0.95)
     rw = min(max(win_prob[0], 0.05), 0.95)
     bf = min(max(ft5_prob[1], 0.05), 0.95)
@@ -514,22 +610,27 @@ def get_draft_only_prediction(blue, red, b_champ_wr, r_champ_wr, b_pc_avg, r_pc_
     return bw, rw, bf, rf
 
 def send_discord_dm(message):
+    """Returns (ok: bool, error: str|None). error is None on success."""
     try:
         token   = st.secrets["DISCORD_BOT_TOKEN"]
         headers = {"Authorization": f"Bot {token}", "Content-Type": "application/json"}
         dm_resp = requests.post(
             "https://discord.com/api/v10/users/@me/channels",
             headers=headers, json={"recipient_id": DISCORD_USER_ID}, timeout=10)
-        if dm_resp.status_code not in [200, 201]: return False
+        if dm_resp.status_code not in [200, 201]:
+            return False, f"DM channel open failed: HTTP {dm_resp.status_code} — {dm_resp.text[:200]}"
         channel_id = dm_resp.json()["id"]
         msg_resp = requests.post(
             f"https://discord.com/api/v10/channels/{channel_id}/messages",
             headers=headers, json={"content": message}, timeout=10)
-        return msg_resp.status_code in [200, 201]
-    except Exception:
-        return False
+        if msg_resp.status_code in [200, 201]:
+            return True, None
+        return False, f"Send message failed: HTTP {msg_resp.status_code} — {msg_resp.text[:200]}"
+    except Exception as e:
+        return False, f"{type(e).__name__}: {e}"
 
 def log_to_sheets(row_data, sheet_id):
+    """Returns (ok: bool, error: str|None). error is None on success."""
     try:
         creds_json = json.loads(st.secrets["GOOGLE_SERVICE_ACCOUNT"])
         from google.oauth2 import service_account
@@ -549,11 +650,12 @@ def log_to_sheets(row_data, sheet_id):
             valueInputOption="USER_ENTERED",
             body={"values": [row_data]}
         ).execute()
-        return True
-    except Exception:
-        return False
+        return True, None
+    except Exception as e:
+        return False, f"{type(e).__name__}: {e}"
 
 def fetch_tracker_history(conf, conf_level, sheet_id):
+    """Returns (history: dict|None, error: str|None)."""
     try:
         creds_json = json.loads(st.secrets["GOOGLE_SERVICE_ACCOUNT"])
         from google.oauth2 import service_account
@@ -564,7 +666,7 @@ def fetch_tracker_history(conf, conf_level, sheet_id):
         result  = service.spreadsheets().values().get(
             spreadsheetId=sheet_id, range="Dashboard!A:J").execute()
         rows = result.get("values", [])
-        if len(rows) < 2: return None
+        if len(rows) < 2: return None, None
         band = conf_short(conf_level)
         wins = losses = 0
         for row in rows[1:]:
@@ -578,10 +680,10 @@ def fetch_tracker_history(conf, conf_level, sheet_id):
                     else: losses += 1
             except (ValueError, IndexError):
                 continue
-        if wins + losses == 0: return None
-        return {'wins': wins, 'losses': losses, 'band': band}
-    except Exception:
-        return None
+        if wins + losses == 0: return None, None
+        return {'wins': wins, 'losses': losses, 'band': band}, None
+    except Exception as e:
+        return None, f"{type(e).__name__}: {e}"
 
 def format_history(history, label):
     if not history: return ""
@@ -627,7 +729,7 @@ Be direct and specific. No bullet points. No statistics."""
             headers={"x-api-key": st.secrets["ANTHROPIC_API_KEY"],
                      "anthropic-version": "2023-06-01",
                      "content-type": "application/json"},
-            json={"model": "claude-sonnet-4-5", "max_tokens": 600,
+            json={"model": "claude-sonnet-5", "max_tokens": 600,
                   "messages": [{"role": "user", "content": prompt}]},
             timeout=30
         )
@@ -665,7 +767,7 @@ with col1:
     st.markdown('<div style="color:#4a90d9;font-size:11px;font-weight:700;font-family:monospace;letter-spacing:0.08em;margin-bottom:4px;">&#9679; BLUE SIDE</div>', unsafe_allow_html=True)
     blue_team_raw   = st.text_input("Team name", key='blue_team_input',
                                      placeholder="e.g. T1, Gen.G, Cloud9...", label_visibility="collapsed")
-    blue_team_match = fuzzy_match_team(blue_team_raw) if blue_team_raw else None
+    blue_team_match, blue_team_exact = fuzzy_match_team(blue_team_raw) if blue_team_raw else (None, False)
     if blue_team_match and blue_team_match in team_lineups:
         lineup = team_lineups[blue_team_match]
         if isinstance(lineup, dict):
@@ -674,17 +776,27 @@ with col1:
             if not st.session_state['blue_p_mid']: st.session_state['blue_p_mid'] = lineup.get('mid','')
             if not st.session_state['blue_p_adc']: st.session_state['blue_p_adc'] = lineup.get('adc','')
             if not st.session_state['blue_p_sup']: st.session_state['blue_p_sup'] = lineup.get('sup','')
-    if blue_team_raw and blue_team_match:
+    if blue_team_raw and blue_team_match and blue_team_exact:
         st.markdown(f'<div style="color:#3a6a20;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#10003; {blue_team_match}</div>', unsafe_allow_html=True)
+    elif blue_team_raw and blue_team_match:
+        st.markdown(f'<div style="color:#8a6020;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#8776; {blue_team_match} (fuzzy match — verify)</div>', unsafe_allow_html=True)
     elif blue_team_raw:
         st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#9900; unknown — using averages</div>', unsafe_allow_html=True)
     blue_comp_raw = st.text_area("Champions", key='blue_comp_input',
                                   placeholder="e.g. Gnar Nocturne Ahri Caitlyn Bard",
                                   height=58, label_visibility="collapsed")
-    blue_parsed = parse_champion_input(blue_comp_raw)
+    blue_parsed, blue_fuzzy_flags = parse_champion_input(blue_comp_raw)
     if blue_comp_raw:
         if len(blue_parsed) == 5:
-            st.markdown(f'<div style="color:#3a6a20;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#10003; {" &middot; ".join([f"{POS_LABELS[i]}: {blue_parsed[i]}" for i in range(5)])}</div>', unsafe_allow_html=True)
+            parts_html = []
+            for i in range(5):
+                is_fuzzy = blue_fuzzy_flags[i] if i < len(blue_fuzzy_flags) else False
+                marker = '≈' if is_fuzzy else ''
+                parts_html.append(f'{POS_LABELS[i]}: {marker}{blue_parsed[i]}')
+            checkmark = '&#8776;' if any(blue_fuzzy_flags) else '&#10003;'
+            color = '#8a6020' if any(blue_fuzzy_flags) else '#3a6a20'
+            suffix = ' (≈ = fuzzy match, verify)' if any(blue_fuzzy_flags) else ''
+            st.markdown(f'<div style="color:{color};font-size:10px;font-family:monospace;margin:-2px 0 2px;">{checkmark} {" &middot; ".join(parts_html)}{suffix}</div>', unsafe_allow_html=True)
         else:
             st.markdown(f'<div style="color:#8a6020;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#9888; {len(blue_parsed)}/5 parsed</div>', unsafe_allow_html=True)
     st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin:4px 0 2px;">PLAYERS (optional)</div>', unsafe_allow_html=True)
@@ -702,7 +814,7 @@ with col2:
     st.markdown('<div style="color:#e05454;font-size:11px;font-weight:700;font-family:monospace;letter-spacing:0.08em;margin-bottom:4px;">&#9679; RED SIDE</div>', unsafe_allow_html=True)
     red_team_raw   = st.text_input("Team name", key='red_team_input',
                                     placeholder="e.g. T1, Gen.G, Cloud9...", label_visibility="collapsed")
-    red_team_match = fuzzy_match_team(red_team_raw) if red_team_raw else None
+    red_team_match, red_team_exact = fuzzy_match_team(red_team_raw) if red_team_raw else (None, False)
     if red_team_match and red_team_match in team_lineups:
         lineup = team_lineups[red_team_match]
         if isinstance(lineup, dict):
@@ -711,17 +823,27 @@ with col2:
             if not st.session_state['red_p_mid']: st.session_state['red_p_mid'] = lineup.get('mid','')
             if not st.session_state['red_p_adc']: st.session_state['red_p_adc'] = lineup.get('adc','')
             if not st.session_state['red_p_sup']: st.session_state['red_p_sup'] = lineup.get('sup','')
-    if red_team_raw and red_team_match:
+    if red_team_raw and red_team_match and red_team_exact:
         st.markdown(f'<div style="color:#3a6a20;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#10003; {red_team_match}</div>', unsafe_allow_html=True)
+    elif red_team_raw and red_team_match:
+        st.markdown(f'<div style="color:#8a6020;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#8776; {red_team_match} (fuzzy match — verify)</div>', unsafe_allow_html=True)
     elif red_team_raw:
         st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#9900; unknown — using averages</div>', unsafe_allow_html=True)
     red_comp_raw = st.text_area("Champions", key='red_comp_input',
                                  placeholder="e.g. Ambessa Pantheon Aurora Jhin Neeko",
                                  height=58, label_visibility="collapsed")
-    red_parsed = parse_champion_input(red_comp_raw)
+    red_parsed, red_fuzzy_flags = parse_champion_input(red_comp_raw)
     if red_comp_raw:
         if len(red_parsed) == 5:
-            st.markdown(f'<div style="color:#3a6a20;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#10003; {" &middot; ".join([f"{POS_LABELS[i]}: {red_parsed[i]}" for i in range(5)])}</div>', unsafe_allow_html=True)
+            parts_html = []
+            for i in range(5):
+                is_fuzzy = red_fuzzy_flags[i] if i < len(red_fuzzy_flags) else False
+                marker = '≈' if is_fuzzy else ''
+                parts_html.append(f'{POS_LABELS[i]}: {marker}{red_parsed[i]}')
+            checkmark = '&#8776;' if any(red_fuzzy_flags) else '&#10003;'
+            color = '#8a6020' if any(red_fuzzy_flags) else '#3a6a20'
+            suffix = ' (≈ = fuzzy match, verify)' if any(red_fuzzy_flags) else ''
+            st.markdown(f'<div style="color:{color};font-size:10px;font-family:monospace;margin:-2px 0 2px;">{checkmark} {" &middot; ".join(parts_html)}{suffix}</div>', unsafe_allow_html=True)
         else:
             st.markdown(f'<div style="color:#8a6020;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#9888; {len(red_parsed)}/5 parsed</div>', unsafe_allow_html=True)
     st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin:4px 0 2px;">PLAYERS (optional)</div>', unsafe_allow_html=True)
@@ -827,8 +949,8 @@ if predict_btn:
         b_recent_wr = get_recent_wr(win_team_recent, blue_team_norm) if blue_team_norm else 0.5
         r_recent_wr = get_recent_wr(win_team_recent, red_team_norm)  if red_team_norm  else 0.5
 
-        b_gd20, b_late = get_gold_features(blue_team_norm) if blue_team_norm else (0.0, 0.0)
-        r_gd20, r_late = get_gold_features(red_team_norm)  if red_team_norm  else (0.0, 0.0)
+        b_gd20, b_late = get_gold_features(blue_team_norm) if blue_team_norm else (GLOBAL_AVG_GD20, GLOBAL_AVG_LATE_SCALING)
+        r_gd20, r_late = get_gold_features(red_team_norm)  if red_team_norm  else (GLOBAL_AVG_GD20, GLOBAL_AVG_LATE_SCALING)
 
         win_extra = pd.DataFrame([[
             b_wr, r_wr, b_wr-r_wr, b_games, r_games,
@@ -848,7 +970,9 @@ if predict_btn:
             'blue_avg_gd20','red_avg_gd20','gd20_diff',
             'blue_late_scaling','red_late_scaling','late_scaling_diff',
         ])
-        win_prob_raw  = win_model.predict_proba(pd.concat([b_win_enc,r_win_enc,win_extra],axis=1))[0]
+        _win_df = pd.concat([b_win_enc, r_win_enc, win_extra], axis=1)
+        verify_feature_order(win_model, _win_df, "Win")
+        win_prob_raw  = win_model.predict_proba(_win_df)[0]
         blue_win_conf = min(max(win_prob_raw[1], 0.05), 0.95)
         red_win_conf  = min(max(win_prob_raw[0], 0.05), 0.95)
 
@@ -869,8 +993,8 @@ if predict_btn:
         r_agg        = sum(champ_aggression.get(c,0.5) for c in red) /len(red)  if red  else 0.5
         b_early      = team_early_rate.get(blue_team_norm,0.5)  if blue_team_norm else 0.5
         r_early      = team_early_rate.get(red_team_norm, 0.5)  if red_team_norm  else 0.5
-        b_speed      = team_kill_speed.get(blue_team_norm,10.0) if blue_team_norm else 10.0
-        r_speed      = team_kill_speed.get(red_team_norm, 10.0) if red_team_norm  else 10.0
+        b_speed      = team_kill_speed.get(blue_team_norm, GLOBAL_AVG_SPEED) if blue_team_norm else GLOBAL_AVG_SPEED
+        r_speed      = team_kill_speed.get(red_team_norm,  GLOBAL_AVG_SPEED) if red_team_norm  else GLOBAL_AVG_SPEED
         ft5_h2h_r    = get_h2h_rate(ft5_h2h, blue_team_norm, red_team_norm) \
                        if blue_team_norm and red_team_norm else 0.5
         ft5_h2h_tot  = get_h2h_total(ft5_h2h, blue_team_norm, red_team_norm) \
@@ -891,7 +1015,9 @@ if predict_btn:
             'blue_kill_speed','red_kill_speed','speed_diff',
             'h2h_early_rate','blue_early_form','red_early_form','early_form_diff',
         ])
-        ft5_prob_raw  = ft5_model.predict_proba(pd.concat([b_ft5_enc,r_ft5_enc,ft5_extra],axis=1))[0]
+        _ft5_df = pd.concat([b_ft5_enc, r_ft5_enc, ft5_extra], axis=1)
+        verify_feature_order(ft5_model, _ft5_df, "FT5")
+        ft5_prob_raw  = ft5_model.predict_proba(_ft5_df)[0]
         blue_ft5_conf = min(max(ft5_prob_raw[1], 0.05), 0.95)
         red_ft5_conf  = min(max(ft5_prob_raw[0], 0.05), 0.95)
 
@@ -953,8 +1079,8 @@ if predict_btn:
             round(win_pick_conf, 4), win_pick_odds,
         ]
 
-        ft5_sheets_ok    = log_to_sheets(ft5_row,    st.secrets["GOOGLE_SHEETS_ID"])        if send_ft5_sheet else None
-        winner_sheets_ok = log_to_sheets(winner_row, st.secrets["GOOGLE_WINNER_SHEETS_ID"]) if send_win_sheet else None
+        ft5_sheets_ok,    ft5_sheets_err    = log_to_sheets(ft5_row,    st.secrets["GOOGLE_SHEETS_ID"])        if send_ft5_sheet else (None, None)
+        winner_sheets_ok, winner_sheets_err = log_to_sheets(winner_row, st.secrets["GOOGLE_WINNER_SHEETS_ID"]) if send_win_sheet else (None, None)
 
         win_edge_d  = max(win_blue_edge, win_red_edge) * 100
         win_units_d = win_blue_units if blue_win_conf > red_win_conf else win_red_units
@@ -981,7 +1107,7 @@ if predict_btn:
 ⚔️ **FT5: {ft5_pick}** {ft5_pick_conf*100:.1f}% | Edge: +{ft5_edge_d:.1f}% | Odds: {ft5_pick_odds} | {ft5_bot_rec}u {ft5_pick_label}
 📊 Win confidence: {win_conf_level} | FT5 confidence: {ft5_conf_level}{draft_win_str}{draft_ft5_str}{red_signal_str}"""
 
-        discord_sent = send_discord_dm(discord_msg) if send_discord else None
+        discord_sent, discord_err = send_discord_dm(discord_msg) if send_discord else (None, None)
         _ph.empty()
 
         # ── helpers ──
@@ -1051,16 +1177,28 @@ if predict_btn:
         red_draft_html  = draft_rows_html(red,  red_players)
 
         league_detected = league_str if league_str else get_league(blue_team_norm or red_team_norm)
-        ft5_league_tips = {
-            'LCK':   'LCK FT5: Best league — +6.9% edge. Red signal 69% accurate.',
-            'LPL':   'LPL FT5: Model not trained on LPL — rough guide only.',
-            'LEC':   'LEC FT5: Weak edge (+2.8%). Red signal unreliable (48%). Only bet blue 60%+.',
-            'LCS':   'LCS FT5: Negative edge (-1.3%). Blue baseline (55%) only — avoid FT5 bets.',
-            'CBLOL': 'CBLOL FT5: Solid edge (+3.2%). Red signal 63% accurate.',
-            'FST':   'FST FT5: Small sample. Red signal weak (25%). Favour blue.',
+        # Prefer live per-league tips saved in the payload at train time.
+        # Falls back to the last hand-verified numbers if train_and_save.py
+        # hasn't been updated to save 'backtest_ft5_league_edges' yet.
+        ft5_league_tips = BACKTEST_LEAGUE_EDGES or {
+            'LCK':   'LCK FT5: Best league — +6.9% edge. Red signal 69% accurate. (last hand-verified)',
+            'LPL':   'LPL FT5: Model not trained on LPL — rough guide only. (last hand-verified)',
+            'LEC':   'LEC FT5: Weak edge (+2.8%). Red signal unreliable (48%). Only bet blue 60%+. (last hand-verified)',
+            'LCS':   'LCS FT5: Negative edge (-1.3%). Blue baseline (55%) only — avoid FT5 bets. (last hand-verified)',
+            'CBLOL': 'CBLOL FT5: Solid edge (+3.2%). Red signal 63% accurate. (last hand-verified)',
+            'FST':   'FST FT5: Small sample. Red signal weak (25%). Favour blue. (last hand-verified)',
         }
         league_tip = next((tip for lg, tip in ft5_league_tips.items()
                            if lg.lower() in (league_detected or '').lower()), '')
+
+        # On the Tier 2 tab the FT5 tips above (all T1 leagues) never match,
+        # so surface T2's own verified win-model per-league edge instead.
+        # Populated by backtester_t2.py.
+        if use_t2 and BACKTEST_WIN_LEAGUE_EDGES:
+            _t2_tip = next((tip for lg, tip in BACKTEST_WIN_LEAGUE_EDGES.items()
+                            if lg.lower() in (league_detected or '').lower()), '')
+            if _t2_tip:
+                league_tip = _t2_tip
 
         red_signal_html = (
             '<div style="background:#1a0505;border-left:2px solid #6a1010;padding:5px 8px;'
@@ -1069,16 +1207,17 @@ if predict_btn:
             'Backtest: 61% red accuracy.</div>'
         ) if ft5_strong_red else ''
 
+        _staleness_note = '' if BACKTEST_STATS_LIVE else ' (from last hand-verified backtest, not re-checked on retrain)'
         win_caution_html = (
             '<div style="background:#1f1a05;border-left:2px solid #5a4010;padding:5px 8px;'
             'border-radius:0 4px 4px 0;font-size:10px;color:#c0a040;margin-top:6px;">'
-            '60-65% range — backtest ~57% actual accuracy, be cautious</div>'
+            f'60-65% range — historically lower real-world accuracy than the raw confidence suggests, be cautious{_staleness_note}</div>'
         ) if win_caution else ''
 
         ft5_caution_html = (
             '<div style="background:#1f1a05;border-left:2px solid #5a4010;padding:5px 8px;'
             'border-radius:0 4px 4px 0;font-size:10px;color:#c0a040;margin-top:6px;">'
-            '60-65% range — treat with extra caution</div>'
+            f'60-65% range — treat with extra caution{_staleness_note}</div>'
         ) if ft5_caution else ''
 
         draft_win_cap = ''
@@ -1237,16 +1376,20 @@ if predict_btn:
 
         # ── Tracker history ──
         with st.spinner("Fetching tracker history..."):
-            win_history = fetch_tracker_history(win_pick_conf, win_conf_level, st.secrets["GOOGLE_WINNER_SHEETS_ID"])
-            ft5_history = fetch_tracker_history(ft5_pick_conf, ft5_conf_level, st.secrets["GOOGLE_SHEETS_ID"])
-        if win_history or ft5_history:
+            win_history, win_history_err = fetch_tracker_history(win_pick_conf, win_conf_level, st.secrets["GOOGLE_WINNER_SHEETS_ID"])
+            ft5_history, ft5_history_err = fetch_tracker_history(ft5_pick_conf, ft5_conf_level, st.secrets["GOOGLE_SHEETS_ID"])
+        if win_history or ft5_history or win_history_err or ft5_history_err:
             with st.expander("📈 Tracker History", expanded=True):
                 if win_history:
                     st.markdown("**Winner picks**")
                     st.markdown(format_history(win_history, "Winner"))
+                elif win_history_err:
+                    st.caption(f"⚠️ Winner history unavailable: {win_history_err}")
                 if ft5_history:
                     st.markdown("**FT5 picks**")
                     st.markdown(format_history(ft5_history, "FT5"))
+                elif ft5_history_err:
+                    st.caption(f"⚠️ FT5 history unavailable: {ft5_history_err}")
 
         with st.expander("📊 Signal Breakdown", expanded=False):
             st.markdown("**Match Winner**")
@@ -1329,8 +1472,18 @@ if predict_btn:
                 '<div style="color:#3a4a6a;font-size:0.75rem;font-family:monospace;text-align:center;margin-top:8px;">'
                 + " &nbsp;|&nbsp; ".join(status_parts) + '</div>',
                 unsafe_allow_html=True)
+        errors = [
+            ("Discord", discord_err if send_discord else None),
+            ("FT5 Sheet", ft5_sheets_err if send_ft5_sheet else None),
+            ("Winner Sheet", winner_sheets_err if send_win_sheet else None),
+        ]
+        errors = [(label, err) for label, err in errors if err]
+        if errors:
+            with st.expander("⚠️ Error details", expanded=False):
+                for label, err in errors:
+                    st.code(f"{label}: {err}", language=None)
 
         st.markdown(
-            '<div style="color:#1e2535;font-size:0.72rem;font-family:monospace;text-align:center;margin-top:12px;">'
-            'V8 | Win 67.09% / AUC 0.7227 | FT5 57.16% | Best ROI at 2.30+ odds</div>',
+            f'<div style="color:#1e2535;font-size:0.72rem;font-family:monospace;text-align:center;margin-top:12px;">'
+            f'V8 {_tier_label} | Win {BACKTEST_WIN_ACC:.2f}% / AUC {BACKTEST_WIN_AUC:.4f} | FT5 {BACKTEST_FT5_ACC:.2f}% | Best ROI at 2.30+ odds</div>',
             unsafe_allow_html=True)
