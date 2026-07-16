@@ -284,19 +284,11 @@ with st.spinner("Loading models..."):
     p_t1 = load_models()
     p_t2 = load_models_t2()
 
-# Fallback values — overridden after model loads at line ~351
-BACKTEST_WIN_ACC    = 67.09
-BACKTEST_WIN_AUC    = 0.7227
-BACKTEST_FT5_ACC    = 57.16
-BACKTEST_STATS_LIVE = False
-
-stale_note = '' if BACKTEST_STATS_LIVE else ' <span style="color:#5a4010;">(last hand-verified)</span>'
-st.markdown(f'''
-<div style="border-bottom:1px solid #1e2535;padding-bottom:10px;margin-bottom:8px;">
-  <span style="color:#c0f060;font-size:1.3rem;font-weight:700;font-family:'SF Mono',monospace;letter-spacing:0.06em;">&#9672; LOL MATCH PREDICTOR v8</span>
-  <span style="color:#3a4a6a;font-size:0.72rem;font-family:'SF Mono',monospace;margin-left:12px;">Win ~{BACKTEST_WIN_ACC:.2f}% / AUC {BACKTEST_WIN_AUC:.4f} &middot; FT5 {BACKTEST_FT5_ACC:.2f}%{stale_note} &middot; Grid search &middot; Gold trajectory</span>
-</div>
-''', unsafe_allow_html=True)
+# The header shows backtest stats, but those depend on WHICH payload loads
+# (T1 vs T2), and the tier selector + model load happen below. So we reserve
+# the slot here and fill it after the payload is known -- otherwise the
+# Tier 2 tab would display T1's numbers.
+_header_slot = st.empty()
 
 st.markdown('<span style="color:#3a6a20;font-size:0.75rem;font-family:monospace;">&#9654; MODELS LOADED</span>', unsafe_allow_html=True)
 
@@ -339,7 +331,7 @@ team_avg_kills       = p.get('team_avg_kills', {})
 ft5_h2h          = p['ft5_h2h']
 ft5_team_recent  = p['ft5_team_recent']
 ft5_team_games   = p['ft5_team_games']
-team_lineups     = p['team_lineups']
+team_lineups     = p.get('team_lineups', {})
 all_teams        = p['all_teams']
 all_champs       = p['all_champs']
 PC_WEIGHT        = p.get('pc_weight', 0.10)
@@ -359,12 +351,32 @@ GLOBAL_AVG_WINRATE      = p.get('global_avg_winrate', 0.5)
 #    last hand-verified numbers. Once train_and_save.py starts saving these
 #    keys, the UI updates itself on every retrain instead of needing a
 #    manual string edit. ──
-BACKTEST_WIN_ACC  = p.get('backtest_win_acc',  67.09)
-BACKTEST_WIN_AUC  = p.get('backtest_win_auc',  0.7227)
-BACKTEST_FT5_ACC  = p.get('backtest_ft5_acc',  57.16)
-BACKTEST_LEAGUE_EDGES = p.get('backtest_ft5_league_edges', None)  # dict: {league: tip string}
+# Fallbacks are TIER-SPECIFIC: T1's hand-verified numbers are meaningless
+# for T2, so a T2 payload without live stats falls back to T2's own last
+# known figures (and is marked as unverified).
+if use_t2:
+    _fb_win_acc, _fb_win_auc, _fb_ft5_acc = 69.83, 0.7471, 54.50
+else:
+    _fb_win_acc, _fb_win_auc, _fb_ft5_acc = 67.09, 0.7227, 57.16
+
+BACKTEST_WIN_ACC  = p.get('backtest_win_acc',  _fb_win_acc)
+BACKTEST_WIN_AUC  = p.get('backtest_win_auc',  _fb_win_auc)
+BACKTEST_FT5_ACC  = p.get('backtest_ft5_acc',  _fb_ft5_acc)
+BACKTEST_LEAGUE_EDGES = p.get('backtest_ft5_league_edges', None)  # FT5 tips: {league: str}
+BACKTEST_WIN_LEAGUE_EDGES = p.get('backtest_win_league_edges', None)  # T2 win tips: {league: str}
 BACKTEST_STATS_LIVE = any(k in p for k in
     ('backtest_win_acc', 'backtest_win_auc', 'backtest_ft5_acc'))
+
+# ── Render the header now that we know which payload loaded ──
+_stale_note = '' if BACKTEST_STATS_LIVE else ' <span style="color:#5a4010;">(last hand-verified)</span>'
+_tier_label = 'T2' if use_t2 else 'T1'
+_ft5_txt = f" &middot; FT5 {BACKTEST_FT5_ACC:.2f}%"
+_header_slot.markdown(f'''
+<div style="border-bottom:1px solid #1e2535;padding-bottom:10px;margin-bottom:8px;">
+  <span style="color:#c0f060;font-size:1.3rem;font-weight:700;font-family:'SF Mono',monospace;letter-spacing:0.06em;">&#9672; LOL MATCH PREDICTOR v8 &middot; {_tier_label}</span>
+  <span style="color:#3a4a6a;font-size:0.72rem;font-family:'SF Mono',monospace;margin-left:12px;">Win ~{BACKTEST_WIN_ACC:.2f}% / AUC {BACKTEST_WIN_AUC:.4f}{_ft5_txt}{_stale_note} &middot; Grid search &middot; Gold trajectory</span>
+</div>
+''', unsafe_allow_html=True)
 
 # ── Feature-order safety net ──
 # win_extra / ft5_extra columns below are hand-typed and MUST match the
@@ -1179,6 +1191,15 @@ if predict_btn:
         league_tip = next((tip for lg, tip in ft5_league_tips.items()
                            if lg.lower() in (league_detected or '').lower()), '')
 
+        # On the Tier 2 tab the FT5 tips above (all T1 leagues) never match,
+        # so surface T2's own verified win-model per-league edge instead.
+        # Populated by backtester_t2.py.
+        if use_t2 and BACKTEST_WIN_LEAGUE_EDGES:
+            _t2_tip = next((tip for lg, tip in BACKTEST_WIN_LEAGUE_EDGES.items()
+                            if lg.lower() in (league_detected or '').lower()), '')
+            if _t2_tip:
+                league_tip = _t2_tip
+
         red_signal_html = (
             '<div style="background:#1a0505;border-left:2px solid #6a1010;padding:5px 8px;'
             'border-radius:0 4px 4px 0;font-size:10px;color:#f06060;margin-bottom:8px;">'
@@ -1464,5 +1485,5 @@ if predict_btn:
 
         st.markdown(
             f'<div style="color:#1e2535;font-size:0.72rem;font-family:monospace;text-align:center;margin-top:12px;">'
-            f'V8 | Win {BACKTEST_WIN_ACC:.2f}% / AUC {BACKTEST_WIN_AUC:.4f} | FT5 {BACKTEST_FT5_ACC:.2f}% | Best ROI at 2.30+ odds</div>',
+            f'V8 {_tier_label} | Win {BACKTEST_WIN_ACC:.2f}% / AUC {BACKTEST_WIN_AUC:.4f} | FT5 {BACKTEST_FT5_ACC:.2f}% | Best ROI at 2.30+ odds</div>',
             unsafe_allow_html=True)
