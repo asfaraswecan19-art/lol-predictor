@@ -36,6 +36,51 @@ MIN_ROLE_GAMES    = 5
 PC_WEIGHT         = 0.10
 RC_WEIGHT         = 0.90
 H2H_CAP           = 0.60
+
+# ── Recency weighting (training) ──
+# Games are weighted by age when FITTING the model (separate from the
+# 'form'/'recent_wr' FEATURES, which already capture recency within the
+# model's inputs). This makes the loss itself trust a 2025 game more than
+# a 2023 game, on top of whatever the recency features already encode.
+# Half-life = time for a game's training weight to decay to 50%.
+RECENCY_HALF_LIFE_DAYS  = 365   # for win model (has exact dates)
+RECENCY_HALF_LIFE_YEARS = 1.5   # for FT5 model (only 'year' granularity available)
+
+def recency_weights_by_date(dates, half_life_days=RECENCY_HALF_LIFE_DAYS):
+    """Exponential recency weight based on days before the most recent date
+    in the given series. Most recent game in the set = weight 1.0."""
+    dates = pd.to_datetime(dates)
+    ref = dates.max()
+    age_days = (ref - dates).dt.days.clip(lower=0)
+    return 0.5 ** (age_days / half_life_days)
+
+def recency_weights_by_year(years, half_life_years=RECENCY_HALF_LIFE_YEARS):
+    """Same idea as recency_weights_by_date but for year-granularity data."""
+    years = pd.Series(years)
+    ref = years.max()
+    age_years = (ref - years).clip(lower=0)
+    return 0.5 ** (age_years / half_life_years)
+
+# ── Hierarchical empirical-Bayes shrinkage ──
+# Old approach: a hard games-cutoff, below which a stat fell back to a flat
+# 0.5 -- e.g. a champ/role combo with 4 games got treated as "zero
+# information" and one with 5 games as "full raw-rate information," a false
+# binary. Shrinkage blends smoothly toward a PRIOR based on sample size, and
+# the priors are hierarchical (each stat shrinks toward the next more
+# general one) instead of every stat defaulting to a flat 0.5:
+#   player-in-role-on-champ  -> shrinks toward that role-champ's rate
+#   role-champ                -> shrinks toward that champion's overall rate
+#   champion overall           -> shrinks toward 0.5 (roughly fair by design)
+K_CHAMP = 8    # champion overall win rate shrinkage strength
+K_ROLE  = MIN_ROLE_GAMES   # role-specific champion win rate (was: hard cutoff)
+K_PC    = MIN_PC_GAMES     # player-champion win rate (was: hard cutoff)
+
+def shrunk_rate(wins, games, prior, k):
+    """Empirical-Bayes shrinkage toward `prior`. More games -> closer to the
+    raw rate. Few/zero games -> closer to `prior`. At games=0 this equals
+    the prior exactly, so it's a strict improvement over a hard cutoff --
+    no discontinuity, and no separate 0.5-fallback logic needed downstream."""
+    return (wins + k * prior) / (games + k)
 POSITIONS         = ['top', 'jng', 'mid', 'adc', 'sup']
 TARGET_LEAGUES    = ['LCK','LPL','LEC','LCS','CBLOL','MSI','WLDs','LTA N','LTA S','LTA','FST']
 
@@ -165,26 +210,24 @@ for _, row in win_df.iterrows():
         key = (pos, champ.strip())
         role_champ_games[key] = role_champ_games.get(key, 0) + 1
         role_champ_wins[key]  = role_champ_wins.get(key,  0) + (1 - result)
-role_champ_rate = {
-    k: role_champ_wins[k] / role_champ_games[k]
-    for k in role_champ_games if role_champ_games[k] >= MIN_ROLE_GAMES
-}
-print(f"  Role-specific champion combos (win): {len(role_champ_rate)}")
 
 pc_wins  = {}
 pc_games = {}
+pc_pos   = {}   # (player, champ) -> most-recently-seen position, used only to
+                # look up the right shrinkage prior below (final pc_rate dict
+                # stays keyed by (player, champ), same as before)
 for _, row in win_df.iterrows():
     result = row['blue_win']
-    for player, champ in zip(row['blue_players'], row['blue_picks']):
+    for i, (player, champ) in enumerate(zip(row['blue_players'], row['blue_picks'])):
         key = (player.strip(), champ.strip())
         pc_games[key] = pc_games.get(key, 0) + 1
         pc_wins[key]  = pc_wins.get(key,  0) + result
-    for player, champ in zip(row['red_players'], row['red_picks']):
+        pc_pos[key]   = POSITIONS[i] if i < len(POSITIONS) else 'unknown'
+    for i, (player, champ) in enumerate(zip(row['red_players'], row['red_picks'])):
         key = (player.strip(), champ.strip())
         pc_games[key] = pc_games.get(key, 0) + 1
         pc_wins[key]  = pc_wins.get(key,  0) + (1 - result)
-pc_rate = {k: pc_wins[k] / pc_games[k] for k in pc_games if pc_games[k] >= MIN_PC_GAMES}
-print(f"  Player-champion combos (win, 5+ games): {len(pc_rate)}")
+        pc_pos[key]   = POSITIONS[i] if i < len(POSITIONS) else 'unknown'
 
 win_team_wins  = {}
 win_team_games = {}
@@ -206,7 +249,27 @@ for _, row in win_df.iterrows():
     for c in row['red_picks']:
         win_champ_games[c] = win_champ_games.get(c, 0) + 1
         win_champ_wins[c]  = win_champ_wins.get(c,  0) + (1 - result)
-win_champ_rate = {c: win_champ_wins[c] / win_champ_games[c] for c in win_champ_games}
+
+# ── Compute the three rate dicts in dependency order, each shrinking
+#    toward the next-more-general one instead of a flat 0.5 cutoff ──
+win_champ_rate = {
+    c: shrunk_rate(win_champ_wins[c], win_champ_games[c], 0.5, K_CHAMP)
+    for c in win_champ_games
+}
+role_champ_rate = {
+    key: shrunk_rate(role_champ_wins[key], role_champ_games[key],
+                     win_champ_rate.get(key[1], 0.5), K_ROLE)
+    for key in role_champ_games
+}
+pc_rate = {
+    key: shrunk_rate(pc_wins[key], pc_games[key],
+                     role_champ_rate.get((pc_pos.get(key, 'unknown'), key[1]), 0.5),
+                     K_PC)
+    for key in pc_games
+}
+print(f"  Champion win rates (shrinkage k={K_CHAMP}): {len(win_champ_rate)}")
+print(f"  Role-specific champion combos (win, shrinkage k={K_ROLE}): {len(role_champ_rate)}")
+print(f"  Player-champion combos (win, shrinkage k={K_PC}): {len(pc_rate)}")
 
 win_h2h = {}
 for _, row in win_df.iterrows():
@@ -334,29 +397,60 @@ param_grid = [
     {'n_estimators': 150, 'max_depth': 2, 'learning_rate': 0.08},
 ]
 
-best_auc    = 0
-best_params = param_grid[1]  # default fallback
+# Recency half-life candidates (days). None = no recency weighting at all
+# (equal-weight baseline), so the search can also tell us if recency
+# weighting is worth it in the first place, not just what the best value is.
+HALF_LIFE_GRID = [None, 180, 270, 365, 545, 730]
 
-for params in param_grid:
-    m = GradientBoostingClassifier(**params, random_state=42)
-    m.fit(win_X[train_mask], win_y[train_mask])
-    pr = m.predict_proba(win_X[val_mask])[:,1]
-    auc = _auc(win_y[val_mask], pr)
-    acc = (m.predict(win_X[val_mask]) == win_y[val_mask].values).mean()
-    marker = ' ← best' if auc > best_auc else ''
-    print(f"  est={params['n_estimators']} depth={params['max_depth']} lr={params['learning_rate']}  "
-          f"→  AUC:{auc:.4f}  Acc:{acc*100:.2f}%{marker}")
-    if auc > best_auc:
-        best_auc    = auc
-        best_params = params
+best_auc     = 0
+best_acc     = 0
+best_params  = param_grid[1]           # default fallback
+best_half_life = RECENCY_HALF_LIFE_DAYS  # default fallback
 
-print(f"\n  Best params: {best_params} (val AUC: {best_auc:.4f})")
+print(f"\n  Searching {len(param_grid)} GBM configs × {len(HALF_LIFE_GRID)} recency half-lives "
+      f"= {len(param_grid)*len(HALF_LIFE_GRID)} fits...")
 
-# Train final model on ALL data (2023-2025) with best params
-print("Training win model on full 2023-2025 data...")
-win_base  = GradientBoostingClassifier(**best_params, random_state=42)
-win_model = CalibratedClassifierCV(win_base, method='isotonic', cv=5)
-win_model.fit(win_X, win_y)
+# Pre-compute one weight vector per half-life candidate (reused across all
+# GBM param combos at that half-life -- avoids recomputing per fit)
+_train_weight_cache = {
+    hl: (recency_weights_by_date(win_df['date'][train_mask], hl) if hl is not None
+         else pd.Series(1.0, index=win_df[train_mask].index))
+    for hl in HALF_LIFE_GRID
+}
+
+for hl in HALF_LIFE_GRID:
+    weights = _train_weight_cache[hl]
+    hl_label = f"{hl}d" if hl is not None else "none"
+    for params in param_grid:
+        m = GradientBoostingClassifier(**params, random_state=42)
+        m.fit(win_X[train_mask], win_y[train_mask], sample_weight=weights)
+        pr = m.predict_proba(win_X[val_mask])[:,1]
+        auc = _auc(win_y[val_mask], pr)
+        acc = (m.predict(win_X[val_mask]) == win_y[val_mask].values).mean()
+        marker = ' ← best' if auc > best_auc else ''
+        print(f"  half-life={hl_label:<5} est={params['n_estimators']} depth={params['max_depth']} "
+              f"lr={params['learning_rate']}  →  AUC:{auc:.4f}  Acc:{acc*100:.2f}%{marker}")
+        if auc > best_auc:
+            best_auc       = auc
+            best_acc       = acc
+            best_params    = params
+            best_half_life = hl
+
+print(f"\n  Best params: {best_params}")
+print(f"  Best recency half-life: {best_half_life if best_half_life is not None else 'none (no recency weighting)'} "
+      f"(val AUC: {best_auc:.4f})")
+
+# Train final model on ALL data (2023-2025+) with best params, weighting
+# more recent games more heavily in the loss using the half-life the search
+# above actually found best -- not a fixed guess.
+hl_desc = f"{best_half_life}d" if best_half_life is not None else "none"
+print(f"Training win model on full data (recency half-life={hl_desc})...")
+full_weights = (recency_weights_by_date(win_df['date'], best_half_life) if best_half_life is not None
+                else pd.Series(1.0, index=win_df.index))
+win_base  = CalibratedClassifierCV(GradientBoostingClassifier(**best_params, random_state=42),
+                                    method='isotonic', cv=5)
+win_model = win_base
+win_model.fit(win_X, win_y, sample_weight=full_weights)
 print("✅ Win model trained")
 
 team_lineups = {}
@@ -515,15 +609,84 @@ print(f"  FT5 training on {ft5_train_mask.sum()} non-ambiguous games "
 ft5_X_train = ft5_X[ft5_train_mask]
 ft5_y_train = ft5_y[ft5_train_mask]
 
-print("Training FT5 model...")
+# ── FT5 recency half-life search (train ≤2024, val=2025) ──
+# Same idea as the win model's half-life search, just on FT5's fixed GBM
+# hyperparams (n_estimators=125, depth=1, lr=0.03 -- unchanged, not being
+# retuned here). Picks the half-life that generalizes best to a real
+# holdout, then reuses it for the production fit below instead of a fixed
+# guess. Falls back to RECENCY_HALF_LIFE_YEARS if there's not enough 2025
+# data yet to search on.
+FT5_HALF_LIFE_GRID = [None, 1.0, 1.5, 2.0, 3.0]
+best_ft5_half_life = RECENCY_HALF_LIFE_YEARS
+ft5_val_acc = None
+ft5_val_auc = None
+if 'year' in ft5_df.columns:
+    ft5_val_mask      = (ft5_df['year'] == 2025) & ft5_train_mask
+    ft5_train_mask_v  = (ft5_df['year'] <= 2024) & ft5_train_mask
+    if ft5_val_mask.sum() > 20 and ft5_train_mask_v.sum() > 50:
+        best_ft5_val_auc = 0
+        print(f"\n  FT5 recency half-life search (train≤2024, val=2025)...")
+        for hl in FT5_HALF_LIFE_GRID:
+            w = (recency_weights_by_year(ft5_df['year'][ft5_train_mask_v], hl) if hl is not None
+                 else pd.Series(1.0, index=ft5_df[ft5_train_mask_v].index))
+            _m = GradientBoostingClassifier(n_estimators=125, max_depth=1, learning_rate=0.03, random_state=42)
+            _m.fit(ft5_X[ft5_train_mask_v], ft5_y[ft5_train_mask_v], sample_weight=w)
+            _pred = _m.predict(ft5_X[ft5_val_mask])
+            _prob = _m.predict_proba(ft5_X[ft5_val_mask])[:, 1]
+            _acc  = float((_pred == ft5_y[ft5_val_mask].values).mean())
+            _auc_ = float(_auc(ft5_y[ft5_val_mask], _prob))
+            hl_label = f"{hl}y" if hl is not None else "none"
+            marker = ' ← best' if _auc_ > best_ft5_val_auc else ''
+            print(f"    half-life={hl_label:<5}  Acc:{_acc*100:.2f}%  AUC:{_auc_:.4f}{marker}")
+            if _auc_ > best_ft5_val_auc:
+                best_ft5_val_auc   = _auc_
+                ft5_val_acc        = _acc
+                ft5_val_auc        = _auc_
+                best_ft5_half_life = hl
+        hl_desc = f"{best_ft5_half_life}y" if best_ft5_half_life is not None else "none"
+        print(f"  Best FT5 recency half-life: {hl_desc} (val AUC: {ft5_val_auc:.4f})")
+    else:
+        print("  FT5 validation skipped -- not enough 2025 data yet")
+else:
+    print("  FT5 validation skipped -- no 'year' column in kill_timelines.csv")
+
+hl_desc = f"{best_ft5_half_life}y" if best_ft5_half_life is not None else "none"
+print(f"\nTraining FT5 model (recency half-life={hl_desc})...")
+ft5_weights = (recency_weights_by_year(ft5_df['year'][ft5_train_mask], best_ft5_half_life)
+               if best_ft5_half_life is not None
+               else pd.Series(1.0, index=ft5_df[ft5_train_mask].index))
 ft5_base  = GradientBoostingClassifier(n_estimators=125, max_depth=1, learning_rate=0.03, random_state=42)
 ft5_model = CalibratedClassifierCV(ft5_base, method='isotonic', cv=5)
-ft5_model.fit(ft5_X_train, ft5_y_train)
+ft5_model.fit(ft5_X_train, ft5_y_train, sample_weight=ft5_weights)
 print("✅ FT5 model trained")
 
 # =================================================================
 # SAVE
 # =================================================================
+# ── Data-driven fallback defaults for app.py ──
+# These give app.py real dataset averages to fall back on for unknown/new
+# teams instead of arbitrary hardcoded literals (e.g. speed=10.0, gd20=0.0).
+global_avg_kill_speed  = float(pd.Series(team_kill_speed).mean()) if team_kill_speed else 10.0
+_nonzero_gd20          = [v['avg_gd20'] for v in gold_lookup.values() if v['avg_gd20'] != 0.0]
+global_avg_gd20         = float(sum(_nonzero_gd20) / len(_nonzero_gd20)) if _nonzero_gd20 else 0.0
+_nonzero_late           = [v['late_scaling'] for v in gold_lookup.values() if v['late_scaling'] != 0.0]
+global_avg_late_scaling = float(sum(_nonzero_late) / len(_nonzero_late)) if _nonzero_late else 0.0
+global_avg_winrate      = float(pd.Series(win_team_rate).mean()) if win_team_rate else 0.5
+
+# ── Grid-search validation metrics (train ≤2024, val=2025) ──
+# NOTE: these are NOT the same thing as the headline "backtest" numbers
+# app.py displays (those come from backtester.py's out-of-sample 2026
+# test, which is the authoritative number). These are saved under
+# separate 'gridsearch_val_*' keys so they never get confused with or
+# silently override the real backtest stats. If you want app.py's header
+# to auto-update, have backtester.py re-open model_payload.pkl after its
+# 2026 backtest and save 'backtest_win_acc' / 'backtest_win_auc' /
+# 'backtest_ft5_acc' / 'backtest_ft5_league_edges' there instead.
+gridsearch_val_win_acc = float(best_acc)
+gridsearch_val_win_auc = float(best_auc)
+gridsearch_val_ft5_acc = ft5_val_acc  # None if 2025 data wasn't available
+gridsearch_val_ft5_auc = ft5_val_auc
+
 payload = {
     'win_model':        win_model,
     'win_mlb':          win_mlb,
@@ -558,6 +721,16 @@ payload = {
     'recent_weight':    RECENT_WEIGHT,
     'gold_window':      GOLD_WINDOW,
     'gold_lookup':      gold_lookup,
+    'global_avg_kill_speed':  global_avg_kill_speed,
+    'global_avg_gd20':        global_avg_gd20,
+    'global_avg_late_scaling':global_avg_late_scaling,
+    'global_avg_winrate':     global_avg_winrate,
+    'gridsearch_val_win_acc': gridsearch_val_win_acc,
+    'gridsearch_val_win_auc': gridsearch_val_win_auc,
+    'gridsearch_val_ft5_acc': gridsearch_val_ft5_acc,
+    'gridsearch_val_ft5_auc': gridsearch_val_ft5_auc,
+    'recency_half_life_days_win': best_half_life,
+    'recency_half_life_years_ft5': best_ft5_half_life,
 }
 
 with open('model_payload.pkl', 'wb') as f:
@@ -574,7 +747,9 @@ print(f"   Form window:     {FORM_WINDOW} (weighted)")
 print(f"   Recent window:   {RECENT_WINDOW} | blend: {RECENT_WEIGHT}")
 print(f"   Blend: {int(PC_WEIGHT*100)}% PC / {int(RC_WEIGHT*100)}% RC | H2H cap: {int(H2H_CAP*100)}% | Min PC: {MIN_PC_GAMES}")
 print(f"   Win GBM:  n_estimators={best_params['n_estimators']}, max_depth={best_params['max_depth']}, lr={best_params['learning_rate']} (grid searched)")
+print(f"   Win recency half-life: {best_half_life if best_half_life is not None else 'none'} days (grid searched)")
 print(f"   FT5 GBM:  n_estimators=125, max_depth=1, lr=0.03")
+print(f"   FT5 recency half-life: {best_ft5_half_life if best_ft5_half_life is not None else 'none'} years (grid searched)")
 print(f"   Gold window: {GOLD_WINDOW} games (avg_gd20 + late_scaling)")
 
 # =================================================================
@@ -618,8 +793,8 @@ else:
             key = (POSITIONS[i] if i < len(POSITIONS) else 'unknown', champ.strip())
             rc_games_t2[key] = rc_games_t2.get(key, 0) + 1
             rc_wins_t2[key]  = rc_wins_t2.get(key, 0) + (1-result)
-    role_champ_rate_t2 = {k: rc_wins_t2[k]/rc_games_t2[k]
-                          for k in rc_games_t2 if rc_games_t2[k] >= MIN_ROLE_GAMES}
+    role_champ_rate_t2 = {k: shrunk_rate(rc_wins_t2[k], rc_games_t2[k], 0.5, K_ROLE)
+                          for k in rc_games_t2}
 
     # Build win features for T2
     tw2={}; tg2={}; cw2={}; cg2={}; h2h2={}; tr2={}; pw2={}; pg2={}
@@ -634,20 +809,20 @@ else:
         bg=tg2.get(blue,0); rg=tg2.get(red,0)
         bwr=tw2.get(blue,0)/bg if bg>0 else 0.5
         rwr=tw2.get(red,0)/rg  if rg>0 else 0.5
-        bcw=sum(cw2.get(c,0)/cg2[c] if cg2.get(c,0)>0 else 0.5 for c in bp)/len(bp)
-        rcw=sum(cw2.get(c,0)/cg2[c] if cg2.get(c,0)>0 else 0.5 for c in rp)/len(rp)
+        bcw=sum(shrunk_rate(cw2.get(c,0), cg2.get(c,0), 0.5, K_CHAMP) for c in bp)/len(bp)
+        rcw=sum(shrunk_rate(cw2.get(c,0), cg2.get(c,0), 0.5, K_CHAMP) for c in rp)/len(rp)
         mk=tuple(sorted([blue,red])); hr=h2h2.get(mk,{}); ht=sum(hr.values())
         h2h_r=cap_h2h(hr.get(blue,0)/ht) if ht>0 else 0.5
         bh=tr2.get(blue,[]); rh=tr2.get(red,[])
         b_form=weighted_form(bh,FORM_WINDOW); r_form=weighted_form(rh,FORM_WINDOW)
         b_rwr=sum(bh[-RECENT_WINDOW:])/len(bh[-RECENT_WINDOW:]) if bh else 0.5
         r_rwr=sum(rh[-RECENT_WINDOW:])/len(rh[-RECENT_WINDOW:]) if rh else 0.5
-        bpc=[PC_WEIGHT*(pw2.get((pl.strip(),c.strip()),0)/pg2.get((pl.strip(),c.strip()),1)
-             if pg2.get((pl.strip(),c.strip()),0)>=MIN_PC_GAMES else 0.5)
+        bpc=[PC_WEIGHT*shrunk_rate(pw2.get((pl.strip(),c.strip()),0), pg2.get((pl.strip(),c.strip()),0),
+                                    role_champ_rate_t2.get((POSITIONS[i] if i<len(POSITIONS) else 'unknown',c.strip()),0.5), K_PC)
              +RC_WEIGHT*role_champ_rate_t2.get((POSITIONS[i] if i<len(POSITIONS) else 'unknown',c.strip()),0.5)
              for i,(pl,c) in enumerate(zip(bpl,bp))]
-        rpc=[PC_WEIGHT*(pw2.get((pl.strip(),c.strip()),0)/pg2.get((pl.strip(),c.strip()),1)
-             if pg2.get((pl.strip(),c.strip()),0)>=MIN_PC_GAMES else 0.5)
+        rpc=[PC_WEIGHT*shrunk_rate(pw2.get((pl.strip(),c.strip()),0), pg2.get((pl.strip(),c.strip()),0),
+                                    role_champ_rate_t2.get((POSITIONS[i] if i<len(POSITIONS) else 'unknown',c.strip()),0.5), K_PC)
              +RC_WEIGHT*role_champ_rate_t2.get((POSITIONS[i] if i<len(POSITIONS) else 'unknown',c.strip()),0.5)
              for i,(pl,c) in enumerate(zip(rpl,rp))]
         bpca=sum(bpc)/len(bpc); rpca=sum(rpc)/len(rpc)
@@ -718,21 +893,47 @@ else:
             print(f"    est={params['n_estimators']} depth={params['max_depth']} lr={params['learning_rate']} → AUC:{a:.4f}{marker}")
             if a>t2_best_auc: t2_best_auc=a; t2_best_params=params
 
-    print(f"  Training T2 win model (best params: {t2_best_params})...")
+    print(f"  Training T2 win model (best params: {t2_best_params}, recency-weighted)...")
     t2_win_base  = GradientBoostingClassifier(**t2_best_params, random_state=42)
     t2_win_model = CalibratedClassifierCV(t2_win_base, method='isotonic', cv=5)
-    t2_win_model.fit(t2_X[t2_train], t2_y[t2_train])
+    t2_win_weights = recency_weights_by_year(t2_feat['year'][t2_train])
+    t2_win_model.fit(t2_X[t2_train], t2_y[t2_train], sample_weight=t2_win_weights)
     print(f"  ✅ T2 win model trained on {t2_train.sum()} games")
 
     # T2 team/champ lookups
     t2_all_teams = sorted(set(df_t2['blue_team'].tolist()+df_t2['red_team'].tolist()))
     t2_all_champs = sorted(set(
         [c for picks in df_t2['blue_picks'].tolist()+df_t2['red_picks'].tolist() for c in picks]))
+
+    # T2 team lineups -- mirrors the T1 build. df_t2 is date-sorted, so the
+    # last write per team wins = that team's most recent lineup. This drives
+    # the player autofill in app.py; it was previously hardcoded to {} for
+    # T2, which is why autofill silently did nothing on the Tier 2 tab.
+    team_lineups_t2 = {}
+    for _, row in df_t2.iterrows():
+        b_players = [p.strip() for p in row['blue_players']]
+        r_players = [p.strip() for p in row['red_players']]
+        team_lineups_t2[row['blue_team']] = {
+            'top': b_players[0] if len(b_players) > 0 else '',
+            'jng': b_players[1] if len(b_players) > 1 else '',
+            'mid': b_players[2] if len(b_players) > 2 else '',
+            'adc': b_players[3] if len(b_players) > 3 else '',
+            'sup': b_players[4] if len(b_players) > 4 else '',
+        }
+        team_lineups_t2[row['red_team']] = {
+            'top': r_players[0] if len(r_players) > 0 else '',
+            'jng': r_players[1] if len(r_players) > 1 else '',
+            'mid': r_players[2] if len(r_players) > 2 else '',
+            'adc': r_players[3] if len(r_players) > 3 else '',
+            'sup': r_players[4] if len(r_players) > 4 else '',
+        }
+    print(f"  T2 team lineups built: {len(team_lineups_t2)} teams")
+
     t2_team_recent = {t: tr2[t] for t in tr2}
     t2_team_games  = {t: tg2[t] for t in tg2}
     t2_team_wins_d = {t: tw2[t] for t in tw2}
     t2_h2h         = h2h2
-    t2_pc_rate     = {k: pw2[k]/pg2[k] for k in pg2 if pg2[k]>=MIN_PC_GAMES}
+    t2_pc_rate     = {k: shrunk_rate(pw2[k], pg2[k], 0.5, K_PC) for k in pg2}
 
     # ── TIER 2 FT5 MODEL ──────────────────────────────────────────
     t2_ft5_available = False
@@ -811,13 +1012,22 @@ else:
         t2_team_kill_speed  = {t: f_speed[t]/f_speed_c[t] for t in f_speed_c if f_speed_c[t]>0}
         t2_ft5_available = True
 
+    # ── Data-driven fallback defaults + validation metrics for T2 ──
+    t2_global_avg_speed = float(pd.Series(t2_team_kill_speed).mean()) if t2_ft5_available and t2_team_kill_speed else global_avg_kill_speed
+    t2_global_avg_winrate = float(pd.Series({t: tw2[t]/tg2[t] if tg2[t]>0 else 0.5 for t in tg2}).mean()) if tg2 else 0.5
+    t2_gridsearch_val_win_acc = None
+    if t2_tr.sum() > 50 and t2_val.sum() > 20:
+        _t2_val_model = GradientBoostingClassifier(**t2_best_params, random_state=42)
+        _t2_val_model.fit(t2_X[t2_tr], t2_y[t2_tr])
+        t2_gridsearch_val_win_acc = float((_t2_val_model.predict(t2_X[t2_val]) == t2_y[t2_val].values).mean())
+
     # Build T2 payload (win model only — FT5 optional)
     t2_payload = {
         'win_model':        t2_win_model,
         'win_mlb':          t2_mlb,
         'win_team_rate':    {t: tw2[t]/tg2[t] if tg2[t]>0 else 0.5 for t in tg2},
         'win_team_games':   tg2,
-        'win_champ_rate':   {c: cw2[c]/cg2[c] for c in cg2 if cg2[c]>0},
+        'win_champ_rate':   {c: shrunk_rate(cw2[c], cg2[c], 0.5, K_CHAMP) for c in cg2},
         'win_h2h':          h2h2,
         'win_team_recent':  tr2,
         'pc_rate':          t2_pc_rate,
@@ -836,9 +1046,16 @@ else:
         'team_avg_kills':      team_avg_kills,
         'all_teams':        t2_all_teams,
         'all_champs':       t2_all_champs,
+        'team_lineups':     team_lineups_t2,
         'team_aliases':     TEAM_ALIASES,
         'tier':             'T2',
         'leagues':          ['LCKC','LFL','EM','PRM'],
+        'global_avg_kill_speed':  t2_global_avg_speed,
+        'global_avg_gd20':        global_avg_gd20,          # T1/T2 share the same OE gold data source
+        'global_avg_late_scaling':global_avg_late_scaling,
+        'global_avg_winrate':     t2_global_avg_winrate,
+        'gridsearch_val_win_acc': t2_gridsearch_val_win_acc,
+        'gridsearch_val_win_auc': float(t2_best_auc) if t2_best_auc else None,
     }
 
     # Add FT5 to T2 payload if available
@@ -852,7 +1069,6 @@ else:
             'ft5_h2h':          f_h2h,
             'ft5_team_recent':  f_recent,
             'ft5_team_games':   te_early_g,
-            'team_lineups':     {},
         })
         print(f"  ✅ T2 FT5 added to payload")
 
