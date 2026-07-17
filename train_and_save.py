@@ -1,6 +1,7 @@
 import warnings
 warnings.filterwarnings('ignore')
 import pandas as pd
+import numpy as np
 import pickle
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.ensemble import GradientBoostingClassifier
@@ -52,14 +53,17 @@ def recency_weights_by_date(dates, half_life_days=RECENCY_HALF_LIFE_DAYS):
     dates = pd.to_datetime(dates)
     ref = dates.max()
     age_days = (ref - dates).dt.days.clip(lower=0)
-    return 0.5 ** (age_days / half_life_days)
+    # .values -> plain positional array. Returning a pandas Series would carry
+    # the ORIGINAL index, which silently misaligns against a reset/filtered
+    # feature matrix when sklearn zips weights to rows by position.
+    return (0.5 ** (age_days / half_life_days)).values
 
 def recency_weights_by_year(years, half_life_years=RECENCY_HALF_LIFE_YEARS):
     """Same idea as recency_weights_by_date but for year-granularity data."""
     years = pd.Series(years)
     ref = years.max()
     age_years = (ref - years).clip(lower=0)
-    return 0.5 ** (age_years / half_life_years)
+    return (0.5 ** (age_years / half_life_years)).values
 
 # ── Hierarchical empirical-Bayes shrinkage ──
 # Old approach: a hard games-cutoff, below which a stat fell back to a flat
@@ -82,7 +86,7 @@ def shrunk_rate(wins, games, prior, k):
     no discontinuity, and no separate 0.5-fallback logic needed downstream."""
     return (wins + k * prior) / (games + k)
 POSITIONS         = ['top', 'jng', 'mid', 'adc', 'sup']
-TARGET_LEAGUES    = ['LCK','LPL','LEC','LCS','CBLOL','MSI','WLDs','LTA N','LTA S','LTA','FST']
+TARGET_LEAGUES    = ['LCK','LPL','LEC','LCS','CBLOL','MSI','WLDs','EWC','LTA N','LTA S','LTA','FST']
 
 def cap_h2h(rate):
     return max(1 - H2H_CAP, min(H2H_CAP, rate))
@@ -414,7 +418,7 @@ print(f"\n  Searching {len(param_grid)} GBM configs × {len(HALF_LIFE_GRID)} rec
 # GBM param combos at that half-life -- avoids recomputing per fit)
 _train_weight_cache = {
     hl: (recency_weights_by_date(win_df['date'][train_mask], hl) if hl is not None
-         else pd.Series(1.0, index=win_df[train_mask].index))
+         else np.ones(int(train_mask.sum())))
     for hl in HALF_LIFE_GRID
 }
 
@@ -446,7 +450,7 @@ print(f"  Best recency half-life: {best_half_life if best_half_life is not None 
 hl_desc = f"{best_half_life}d" if best_half_life is not None else "none"
 print(f"Training win model on full data (recency half-life={hl_desc})...")
 full_weights = (recency_weights_by_date(win_df['date'], best_half_life) if best_half_life is not None
-                else pd.Series(1.0, index=win_df.index))
+                else np.ones(len(win_df)))
 win_base  = CalibratedClassifierCV(GradientBoostingClassifier(**best_params, random_state=42),
                                     method='isotonic', cv=5)
 win_model = win_base
@@ -628,7 +632,7 @@ if 'year' in ft5_df.columns:
         print(f"\n  FT5 recency half-life search (train≤2024, val=2025)...")
         for hl in FT5_HALF_LIFE_GRID:
             w = (recency_weights_by_year(ft5_df['year'][ft5_train_mask_v], hl) if hl is not None
-                 else pd.Series(1.0, index=ft5_df[ft5_train_mask_v].index))
+                 else np.ones(int(ft5_train_mask_v.sum())))
             _m = GradientBoostingClassifier(n_estimators=125, max_depth=1, learning_rate=0.03, random_state=42)
             _m.fit(ft5_X[ft5_train_mask_v], ft5_y[ft5_train_mask_v], sample_weight=w)
             _pred = _m.predict(ft5_X[ft5_val_mask])
@@ -654,7 +658,7 @@ hl_desc = f"{best_ft5_half_life}y" if best_ft5_half_life is not None else "none"
 print(f"\nTraining FT5 model (recency half-life={hl_desc})...")
 ft5_weights = (recency_weights_by_year(ft5_df['year'][ft5_train_mask], best_ft5_half_life)
                if best_ft5_half_life is not None
-               else pd.Series(1.0, index=ft5_df[ft5_train_mask].index))
+               else np.ones(int(ft5_train_mask.sum())))
 ft5_base  = GradientBoostingClassifier(n_estimators=125, max_depth=1, learning_rate=0.03, random_state=42)
 ft5_model = CalibratedClassifierCV(ft5_base, method='isotonic', cv=5)
 ft5_model.fit(ft5_X_train, ft5_y_train, sample_weight=ft5_weights)
