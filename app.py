@@ -7,6 +7,7 @@ import requests
 import difflib
 import re
 import json
+import os
 from datetime import datetime
 
 st.set_page_config(
@@ -265,14 +266,37 @@ def ft5_confidence(blue_prob, b_early_rate, r_early_rate,
     return level, desc, reasons, warnings
 
 
+def _payload_mtime(path):
+    """Modification time of a payload file, or None if it doesn't exist.
+    Used as a cache key -- see load_models() below."""
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return None
+
+# NOTE ON THE _mtime ARG:
+# @st.cache_resource caches the RETURNED OBJECT, keyed on the function's
+# arguments -- NOT on the contents of any file the function reads. Without
+# a cache key that changes, pushing a rebuilt model_payload.pkl does NOT
+# refresh the app: the cached loader keeps handing back the payload it
+# loaded at startup, so the site silently serves a stale model even after
+# a redeploy. (A browser refresh doesn't help; the cache is server-side.)
+#
+# Passing the file's mtime makes the cache self-invalidating: a rebuilt
+# payload has a new mtime -> new cache key -> fresh load. No manual
+# "Reboot app" needed after each retrain.
+#
+# The leading underscore tells Streamlit not to try to hash the argument,
+# but changing its VALUE still creates a new cache entry -- which is
+# exactly the behaviour we want.
 @st.cache_resource
-def load_models():
+def load_models(_mtime):
     with open('model_payload.pkl', 'rb') as f:
         p = pickle.load(f)
     return p
 
 @st.cache_resource
-def load_models_t2():
+def load_models_t2(_mtime):
     try:
         with open('model_payload_t2.pkl', 'rb') as f:
             p = pickle.load(f)
@@ -281,8 +305,8 @@ def load_models_t2():
         return None
 
 with st.spinner("Loading models..."):
-    p_t1 = load_models()
-    p_t2 = load_models_t2()
+    p_t1 = load_models(_payload_mtime('model_payload.pkl'))
+    p_t2 = load_models_t2(_payload_mtime('model_payload_t2.pkl'))
 
 # The header shows backtest stats, but those depend on WHICH payload loads
 # (T1 vs T2), and the tier selector + model load happen below. So we reserve
