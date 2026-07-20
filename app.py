@@ -320,12 +320,16 @@ st.markdown('<span style="color:#3a6a20;font-size:0.75rem;font-family:monospace;
 st.markdown('<div style="border-top:1px solid #1e2535;margin:8px 0 6px;"></div>', unsafe_allow_html=True)
 selected_tier = st.radio(
     "LEAGUE TIER",
-    ["🏆 Tier 1 (LCK / LPL / LEC / LCS / CBLOL)", "🥈 Tier 2 (LCKC / LFL / EM / PRM)"],
+    ["🏆 Tier 1 (LCK / LPL / LEC / LCS / CBLOL)", "🥈 Tier 2 (LCKC / LFL / EM / PRM)", "🔀 KeSPA (mixed rosters)"],
     horizontal=True,
-    help="Select Tier 2 for Challenger/regional leagues"
+    help="Select Tier 2 for Challenger/regional leagues. KeSPA = mixed main/academy rosters (once-a-year event)."
 )
+use_kespa = "KeSPA" in selected_tier and p_t2 is not None
 use_t2 = "Tier 2" in selected_tier and p_t2 is not None
-if use_t2:
+if use_kespa:
+    st.markdown('<div style="color:#c080f0;font-size:10px;font-family:monospace;margin-bottom:4px;">&#9658; KeSPA mixed mode — pick each side\'s tier below. Cross-tier: experimental, unvalidated.</div>', unsafe_allow_html=True)
+    p = p_t1  # KeSPA scores with the T1 model (see KeSPA branch below)
+elif use_t2:
     st.markdown('<div style="color:#60a0f0;font-size:10px;font-family:monospace;margin-bottom:4px;">&#9658; Using Tier 2 model — trained on LCKC, LFL, EM, PRM</div>', unsafe_allow_html=True)
     p = p_t2
 elif "Tier 2" in selected_tier and p_t2 is None:
@@ -546,18 +550,88 @@ def get_gold_features(team_name, match_date=None):
     # to the dataset average rather than a hardcoded 0.0
     return GLOBAL_AVG_GD20, GLOBAL_AVG_LATE_SCALING
 
+def kespa_side_stats(payload, team_norm, champs, players):
+    """Extract ONE side's win-model stats from a SPECIFIED payload.
+
+    KeSPA games mix rosters -- a T1-named team may field its academy roster,
+    or a main roster may face an academy team. So each side is sourced from
+    whichever tier the user says its ROSTER belongs to, pulling that tier's
+    payload rather than the globally-selected one. Returns a dict of the
+    per-side scalars the win feature row needs.
+
+    Reuses the existing helper functions but passes THIS payload's dicts,
+    so there's no duplicated feature logic to drift out of sync.
+    """
+    wtr = payload['win_team_rate']
+    wtg = payload['win_team_games']
+    wcr = payload['win_champ_rate']
+    wrec = payload['win_team_recent']
+    pcr = payload['pc_rate']
+    pcg = payload['pc_games']
+    rcr = payload['role_champ_rate']
+    gl  = payload.get('gold_lookup', {})
+    pcw = payload.get('pc_weight', 0.10)
+    rcw = payload.get('rc_weight', 0.90)
+    g_gd20 = payload.get('global_avg_gd20', 0.0)
+    g_late = payload.get('global_avg_late_scaling', 0.0)
+    g_win  = payload.get('global_avg_winrate', 0.5)
+
+    wr    = wtr.get(team_norm, g_win) if team_norm else g_win
+    games = wtg.get(team_norm, 0)     if team_norm else 0
+    champ_wr = sum(wcr.get(c, 0.5) for c in champs)/len(champs) if champs else 0.5
+
+    # form / recent (reuse existing weighting, this payload's recent dict)
+    recent = wrec.get(team_norm, [0.5]) if team_norm else [0.5]
+    fh = recent[-FORM_WINDOW:]
+    form = (sum(v*w for v,w in zip(fh, range(1,len(fh)+1)))/sum(range(1,len(fh)+1))) if fh else 0.5
+    rh = recent[-RECENT_WINDOW:]
+    recent_wr = sum(rh)/len(rh) if rh else 0.5
+
+    # blended player-champ (this payload's pc/role dicts)
+    POSITIONS = ['top','jng','mid','adc','sup']
+    if champs and players:
+        rates = []
+        for i,(pl,c) in enumerate(zip(players, champs)):
+            pos = POSITIONS[i] if i < len(POSITIONS) else 'unknown'
+            pc_val = pcr.get((pl.strip(), c.strip()), 0.5)
+            rc_val = rcr.get((pos, c.strip()), 0.5)
+            rates.append(pcw*pc_val + rcw*rc_val)
+        pc_avg = sum(rates)/len(rates)
+    else:
+        pc_avg = 0.5
+
+    # gold trajectory from this payload's lookup
+    gd20, late = g_gd20, g_late
+    if team_norm:
+        from datetime import datetime, timedelta
+        dt = datetime.now()
+        for i in range(30):
+            ds = (dt - timedelta(days=i)).strftime('%Y-%m-%d')
+            if (ds, team_norm) in gl:
+                e = gl[(ds, team_norm)]
+                gd20, late = e.get('avg_gd20', g_gd20), e.get('late_scaling', g_late)
+                break
+
+    return {'wr':wr, 'games':games, 'champ_wr':champ_wr, 'form':form,
+            'recent_wr':recent_wr, 'pc_avg':pc_avg, 'gd20':gd20, 'late':late}
+
 def odds_label(odds):
     if odds < 1.60:    return "Low odds"
     elif odds >= 2.30: return "Great odds"
     else:              return "Good odds"
 
-def calc_edge(conf, odds):
+def calc_edge(conf, odds, unit_cap=None):
     implied = 1 / odds
     edge    = conf - implied
     if edge < 0.08:   units, label = 0, "SKIP"
     elif edge < 0.12: units, label = 1, "DECENT"
     elif edge < 0.18: units, label = 2, "STRONG"
     else:             units, label = 3, "VERY STRONG"
+    # KeSPA cross-tier predictions are unvalidated (no backtest possible for a
+    # once-a-year event), so cap the recommended stake regardless of edge.
+    if unit_cap is not None and units > unit_cap:
+        units = unit_cap
+        label = "CAPPED (cross-tier)"
     return edge, units, label, implied
 
 def show_signal(label, b_val, r_val, low_t, high_t, blue_name, red_name, fmt=".1f"):
@@ -789,6 +863,11 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.markdown('<div style="color:#4a90d9;font-size:11px;font-weight:700;font-family:monospace;letter-spacing:0.08em;margin-bottom:4px;">&#9679; BLUE SIDE</div>', unsafe_allow_html=True)
+    blue_kespa_tier = 'T1'
+    if use_kespa:
+        blue_kespa_tier = st.radio("Blue roster tier", ["T1 (main)", "T2 (academy)"],
+                                    key='blue_kespa_tier', horizontal=True, label_visibility="collapsed")
+        blue_kespa_tier = 'T2' if 'T2' in blue_kespa_tier else 'T1'
     blue_team_raw   = st.text_input("Team name", key='blue_team_input',
                                      placeholder="e.g. T1, Gen.G, Cloud9...", label_visibility="collapsed")
     blue_team_match, blue_team_exact = fuzzy_match_team(blue_team_raw) if blue_team_raw else (None, False)
@@ -836,6 +915,11 @@ with col1:
 
 with col2:
     st.markdown('<div style="color:#e05454;font-size:11px;font-weight:700;font-family:monospace;letter-spacing:0.08em;margin-bottom:4px;">&#9679; RED SIDE</div>', unsafe_allow_html=True)
+    red_kespa_tier = 'T1'
+    if use_kespa:
+        red_kespa_tier = st.radio("Red roster tier", ["T1 (main)", "T2 (academy)"],
+                                   key='red_kespa_tier', horizontal=True, label_visibility="collapsed")
+        red_kespa_tier = 'T2' if 'T2' in red_kespa_tier else 'T1'
     red_team_raw   = st.text_input("Team name", key='red_team_input',
                                     placeholder="e.g. T1, Gen.G, Cloud9...", label_visibility="collapsed")
     red_team_match, red_team_exact = fuzzy_match_team(red_team_raw) if red_team_raw else (None, False)
@@ -950,31 +1034,72 @@ if predict_btn:
             r_win_enc = pd.DataFrame([[0]*len(win_mlb.classes_)],
                 columns=['red_' + c for c in win_mlb.classes_])
 
-        b_wr    = win_team_rate.get(blue_team_norm, 0.5)  if blue_team_norm else 0.5
-        r_wr    = win_team_rate.get(red_team_norm,  0.5)  if red_team_norm  else 0.5
-        b_games = win_team_games.get(blue_team_norm, 0)   if blue_team_norm else 0
-        r_games = win_team_games.get(red_team_norm,  0)   if red_team_norm  else 0
+        if use_kespa:
+            # KeSPA: pull each side's stats from ITS chosen tier's payload.
+            # Team names are matched against that payload's team list.
+            _bp = p_t2 if blue_kespa_tier == 'T2' else p_t1
+            _rp = p_t2 if red_kespa_tier  == 'T2' else p_t1
+            _b_norm = None
+            if blue_team_raw.strip():
+                for t in _bp['all_teams']:
+                    if blue_team_raw.strip().lower() == t.lower(): _b_norm = t; break
+                if _b_norm is None:
+                    import difflib as _dl
+                    _m = _dl.get_close_matches(blue_team_raw.strip().lower(),
+                            {t.lower():t for t in _bp['all_teams']}.keys(), n=1, cutoff=0.7)
+                    if _m: _b_norm = {t.lower():t for t in _bp['all_teams']}[_m[0]]
+            _r_norm = None
+            if red_team_raw.strip():
+                for t in _rp['all_teams']:
+                    if red_team_raw.strip().lower() == t.lower(): _r_norm = t; break
+                if _r_norm is None:
+                    import difflib as _dl
+                    _m = _dl.get_close_matches(red_team_raw.strip().lower(),
+                            {t.lower():t for t in _rp['all_teams']}.keys(), n=1, cutoff=0.7)
+                    if _m: _r_norm = {t.lower():t for t in _rp['all_teams']}[_m[0]]
 
-        b_champ_wr = sum(win_champ_rate.get(c,0.5) for c in blue)/len(blue) if blue else 0.5
-        r_champ_wr = sum(win_champ_rate.get(c,0.5) for c in red) /len(red)  if red  else 0.5
+            _bs = kespa_side_stats(_bp, _b_norm, blue, blue_players)
+            _rs = kespa_side_stats(_rp, _r_norm, red,  red_players)
+            b_wr, r_wr = _bs['wr'], _rs['wr']
+            b_games, r_games = _bs['games'], _rs['games']
+            b_champ_wr, r_champ_wr = _bs['champ_wr'], _rs['champ_wr']
+            win_h2h_r = 0.5   # no cross-tier h2h exists
+            b_form, r_form = _bs['form'], _rs['form']
+            h2h_total = 0; b_win_h2h = r_win_h2h = 0
+            b_pc_avg, r_pc_avg = _bs['pc_avg'], _rs['pc_avg']
+            b_recent_wr, r_recent_wr = _bs['recent_wr'], _rs['recent_wr']
+            b_gd20, b_late = _bs['gd20'], _bs['late']
+            r_gd20, r_late = _rs['gd20'], _rs['late']
+            # surface what got matched, since KeSPA names cross tiers
+            st.markdown(f'<div style="color:#c080f0;font-size:10px;font-family:monospace;margin:4px 0;">'
+                        f'KeSPA lookup: BLUE={_b_norm or "unknown"} [{blue_kespa_tier}] &middot; '
+                        f'RED={_r_norm or "unknown"} [{red_kespa_tier}]</div>', unsafe_allow_html=True)
+        else:
+            b_wr    = win_team_rate.get(blue_team_norm, 0.5)  if blue_team_norm else 0.5
+            r_wr    = win_team_rate.get(red_team_norm,  0.5)  if red_team_norm  else 0.5
+            b_games = win_team_games.get(blue_team_norm, 0)   if blue_team_norm else 0
+            r_games = win_team_games.get(red_team_norm,  0)   if red_team_norm  else 0
 
-        win_h2h_r  = get_h2h_rate(win_h2h, blue_team_norm, red_team_norm) \
-                     if blue_team_norm and red_team_norm else 0.5
-        b_form     = get_form(win_team_recent, blue_team_norm) if blue_team_norm else 0.5
-        r_form     = get_form(win_team_recent, red_team_norm)  if red_team_norm  else 0.5
-        h2h_total  = get_h2h_total(win_h2h, blue_team_norm, red_team_norm) \
-                     if blue_team_norm and red_team_norm else 0
-        b_win_h2h, r_win_h2h = get_h2h_record(win_h2h, blue_team_norm, red_team_norm) \
-                                if blue_team_norm and red_team_norm else (0,0)
+            b_champ_wr = sum(win_champ_rate.get(c,0.5) for c in blue)/len(blue) if blue else 0.5
+            r_champ_wr = sum(win_champ_rate.get(c,0.5) for c in red) /len(red)  if red  else 0.5
 
-        b_pc_avg = get_blended_avg(blue_players, blue) if blue else 0.5
-        r_pc_avg = get_blended_avg(red_players,  red)  if red  else 0.5
+            win_h2h_r  = get_h2h_rate(win_h2h, blue_team_norm, red_team_norm) \
+                         if blue_team_norm and red_team_norm else 0.5
+            b_form     = get_form(win_team_recent, blue_team_norm) if blue_team_norm else 0.5
+            r_form     = get_form(win_team_recent, red_team_norm)  if red_team_norm  else 0.5
+            h2h_total  = get_h2h_total(win_h2h, blue_team_norm, red_team_norm) \
+                         if blue_team_norm and red_team_norm else 0
+            b_win_h2h, r_win_h2h = get_h2h_record(win_h2h, blue_team_norm, red_team_norm) \
+                                    if blue_team_norm and red_team_norm else (0,0)
 
-        b_recent_wr = get_recent_wr(win_team_recent, blue_team_norm) if blue_team_norm else 0.5
-        r_recent_wr = get_recent_wr(win_team_recent, red_team_norm)  if red_team_norm  else 0.5
+            b_pc_avg = get_blended_avg(blue_players, blue) if blue else 0.5
+            r_pc_avg = get_blended_avg(red_players,  red)  if red  else 0.5
 
-        b_gd20, b_late = get_gold_features(blue_team_norm) if blue_team_norm else (GLOBAL_AVG_GD20, GLOBAL_AVG_LATE_SCALING)
-        r_gd20, r_late = get_gold_features(red_team_norm)  if red_team_norm  else (GLOBAL_AVG_GD20, GLOBAL_AVG_LATE_SCALING)
+            b_recent_wr = get_recent_wr(win_team_recent, blue_team_norm) if blue_team_norm else 0.5
+            r_recent_wr = get_recent_wr(win_team_recent, red_team_norm)  if red_team_norm  else 0.5
+
+            b_gd20, b_late = get_gold_features(blue_team_norm) if blue_team_norm else (GLOBAL_AVG_GD20, GLOBAL_AVG_LATE_SCALING)
+            r_gd20, r_late = get_gold_features(red_team_norm)  if red_team_norm  else (GLOBAL_AVG_GD20, GLOBAL_AVG_LATE_SCALING)
 
         win_extra = pd.DataFrame([[
             b_wr, r_wr, b_wr-r_wr, b_games, r_games,
@@ -1000,50 +1125,60 @@ if predict_btn:
         blue_win_conf = min(max(win_prob_raw[1], 0.05), 0.95)
         red_win_conf  = min(max(win_prob_raw[0], 0.05), 0.95)
 
-        if len(blue) == 5:
-            b_ft5_enc = pd.DataFrame(ft5_mlb.transform([blue]),
-                columns=['blue_' + c for c in ft5_mlb.classes_])
+        if use_kespa:
+            # KeSPA is winner-only. FT5 has no meaning across mixed rosters and
+            # its features aren't sourced per-side, so skip it and set neutral
+            # placeholders the downstream display code can safely ignore.
+            b_agg = r_agg = 0.5; b_early = r_early = 0.5
+            b_speed = r_speed = GLOBAL_AVG_SPEED
+            ft5_h2h_r = 0.5; ft5_h2h_tot = 0; b_ft5_h2h = r_ft5_h2h = 0
+            b_early_form = r_early_form = 0.5
+            blue_ft5_conf = red_ft5_conf = 0.5
         else:
-            b_ft5_enc = pd.DataFrame([[0]*len(ft5_mlb.classes_)],
-                columns=['blue_' + c for c in ft5_mlb.classes_])
-        if len(red) == 5:
-            r_ft5_enc = pd.DataFrame(ft5_mlb.transform([red]),
-                columns=['red_' + c for c in ft5_mlb.classes_])
-        else:
-            r_ft5_enc = pd.DataFrame([[0]*len(ft5_mlb.classes_)],
-                columns=['red_' + c for c in ft5_mlb.classes_])
+            if len(blue) == 5:
+                b_ft5_enc = pd.DataFrame(ft5_mlb.transform([blue]),
+                    columns=['blue_' + c for c in ft5_mlb.classes_])
+            else:
+                b_ft5_enc = pd.DataFrame([[0]*len(ft5_mlb.classes_)],
+                    columns=['blue_' + c for c in ft5_mlb.classes_])
+            if len(red) == 5:
+                r_ft5_enc = pd.DataFrame(ft5_mlb.transform([red]),
+                    columns=['red_' + c for c in ft5_mlb.classes_])
+            else:
+                r_ft5_enc = pd.DataFrame([[0]*len(ft5_mlb.classes_)],
+                    columns=['red_' + c for c in ft5_mlb.classes_])
 
-        b_agg        = sum(champ_aggression.get(c,0.5) for c in blue)/len(blue) if blue else 0.5
-        r_agg        = sum(champ_aggression.get(c,0.5) for c in red) /len(red)  if red  else 0.5
-        b_early      = team_early_rate.get(blue_team_norm,0.5)  if blue_team_norm else 0.5
-        r_early      = team_early_rate.get(red_team_norm, 0.5)  if red_team_norm  else 0.5
-        b_speed      = team_kill_speed.get(blue_team_norm, GLOBAL_AVG_SPEED) if blue_team_norm else GLOBAL_AVG_SPEED
-        r_speed      = team_kill_speed.get(red_team_norm,  GLOBAL_AVG_SPEED) if red_team_norm  else GLOBAL_AVG_SPEED
-        ft5_h2h_r    = get_h2h_rate(ft5_h2h, blue_team_norm, red_team_norm) \
-                       if blue_team_norm and red_team_norm else 0.5
-        ft5_h2h_tot  = get_h2h_total(ft5_h2h, blue_team_norm, red_team_norm) \
-                       if blue_team_norm and red_team_norm else 0
-        b_ft5_h2h, r_ft5_h2h = get_h2h_record(ft5_h2h, blue_team_norm, red_team_norm) \
-                                if blue_team_norm and red_team_norm else (0,0)
-        b_early_form = get_form(ft5_team_recent, blue_team_norm) if blue_team_norm else 0.5
-        r_early_form = get_form(ft5_team_recent, red_team_norm)  if red_team_norm  else 0.5
+            b_agg        = sum(champ_aggression.get(c,0.5) for c in blue)/len(blue) if blue else 0.5
+            r_agg        = sum(champ_aggression.get(c,0.5) for c in red) /len(red)  if red  else 0.5
+            b_early      = team_early_rate.get(blue_team_norm,0.5)  if blue_team_norm else 0.5
+            r_early      = team_early_rate.get(red_team_norm, 0.5)  if red_team_norm  else 0.5
+            b_speed      = team_kill_speed.get(blue_team_norm, GLOBAL_AVG_SPEED) if blue_team_norm else GLOBAL_AVG_SPEED
+            r_speed      = team_kill_speed.get(red_team_norm,  GLOBAL_AVG_SPEED) if red_team_norm  else GLOBAL_AVG_SPEED
+            ft5_h2h_r    = get_h2h_rate(ft5_h2h, blue_team_norm, red_team_norm) \
+                           if blue_team_norm and red_team_norm else 0.5
+            ft5_h2h_tot  = get_h2h_total(ft5_h2h, blue_team_norm, red_team_norm) \
+                           if blue_team_norm and red_team_norm else 0
+            b_ft5_h2h, r_ft5_h2h = get_h2h_record(ft5_h2h, blue_team_norm, red_team_norm) \
+                                    if blue_team_norm and red_team_norm else (0,0)
+            b_early_form = get_form(ft5_team_recent, blue_team_norm) if blue_team_norm else 0.5
+            r_early_form = get_form(ft5_team_recent, red_team_norm)  if red_team_norm  else 0.5
 
-        ft5_extra = pd.DataFrame([[
-            b_agg, r_agg, b_agg-r_agg,
-            b_early, r_early, b_early-r_early,
-            b_speed, r_speed, r_speed-b_speed,
-            ft5_h2h_r, b_early_form, r_early_form, b_early_form-r_early_form,
-        ]], columns=[
-            'blue_aggression','red_aggression','aggression_diff',
-            'blue_early_rate','red_early_rate','early_rate_diff',
-            'blue_kill_speed','red_kill_speed','speed_diff',
-            'h2h_early_rate','blue_early_form','red_early_form','early_form_diff',
-        ])
-        _ft5_df = pd.concat([b_ft5_enc, r_ft5_enc, ft5_extra], axis=1)
-        verify_feature_order(ft5_model, _ft5_df, "FT5")
-        ft5_prob_raw  = ft5_model.predict_proba(_ft5_df)[0]
-        blue_ft5_conf = min(max(ft5_prob_raw[1], 0.05), 0.95)
-        red_ft5_conf  = min(max(ft5_prob_raw[0], 0.05), 0.95)
+            ft5_extra = pd.DataFrame([[
+                b_agg, r_agg, b_agg-r_agg,
+                b_early, r_early, b_early-r_early,
+                b_speed, r_speed, r_speed-b_speed,
+                ft5_h2h_r, b_early_form, r_early_form, b_early_form-r_early_form,
+            ]], columns=[
+                'blue_aggression','red_aggression','aggression_diff',
+                'blue_early_rate','red_early_rate','early_rate_diff',
+                'blue_kill_speed','red_kill_speed','speed_diff',
+                'h2h_early_rate','blue_early_form','red_early_form','early_form_diff',
+            ])
+            _ft5_df = pd.concat([b_ft5_enc, r_ft5_enc, ft5_extra], axis=1)
+            verify_feature_order(ft5_model, _ft5_df, "FT5")
+            ft5_prob_raw  = ft5_model.predict_proba(_ft5_df)[0]
+            blue_ft5_conf = min(max(ft5_prob_raw[1], 0.05), 0.95)
+            red_ft5_conf  = min(max(ft5_prob_raw[0], 0.05), 0.95)
 
         if len(blue)==5 and len(red)==5:
             bdw, rdw, bdf, rdf = get_draft_only_prediction(
@@ -1051,10 +1186,21 @@ if predict_btn:
         else:
             bdw = rdw = bdf = rdf = None
 
-        win_blue_edge, win_blue_units, win_blue_label, win_blue_impl = calc_edge(blue_win_conf, win_blue_odds)
-        win_red_edge,  win_red_units,  win_red_label,  win_red_impl  = calc_edge(red_win_conf,  win_red_odds)
-        ft5_blue_edge, ft5_blue_units, ft5_blue_label, ft5_blue_impl = calc_edge(blue_ft5_conf, ft5_blue_odds)
-        ft5_red_edge,  ft5_red_units,  ft5_red_label,  ft5_red_impl  = calc_edge(red_ft5_conf,  ft5_red_odds)
+        _cap = 1 if use_kespa else None
+        win_blue_edge, win_blue_units, win_blue_label, win_blue_impl = calc_edge(blue_win_conf, win_blue_odds, _cap)
+        win_red_edge,  win_red_units,  win_red_label,  win_red_impl  = calc_edge(red_win_conf,  win_red_odds, _cap)
+        ft5_blue_edge, ft5_blue_units, ft5_blue_label, ft5_blue_impl = calc_edge(blue_ft5_conf, ft5_blue_odds, _cap)
+        ft5_red_edge,  ft5_red_units,  ft5_red_label,  ft5_red_impl  = calc_edge(red_ft5_conf,  ft5_red_odds, _cap)
+
+        if use_kespa:
+            st.markdown(
+                '<div style="background:#2a1a3a;border-left:3px solid #c080f0;padding:8px 12px;'
+                'border-radius:0 4px 4px 0;margin:8px 0;font-family:monospace;">'
+                '<span style="color:#c080f0;font-size:12px;font-weight:700;">&#9888; CROSS-TIER (KeSPA) PREDICTION</span><br>'
+                '<span style="color:#a080c0;font-size:10px;">Each side sourced from its own tier. This game type happens '
+                '~once a year and CANNOT be backtested — treat the number as a rough guide, not a validated edge. '
+                'Unit sizing is capped. FT5 is disabled for cross-tier games.</span></div>',
+                unsafe_allow_html=True)
 
         ft5_strong_red = blue_ft5_conf < 0.48
 
@@ -1103,7 +1249,7 @@ if predict_btn:
             round(win_pick_conf, 4), win_pick_odds,
         ]
 
-        ft5_sheets_ok,    ft5_sheets_err    = log_to_sheets(ft5_row,    st.secrets["GOOGLE_SHEETS_ID"])        if send_ft5_sheet else (None, None)
+        ft5_sheets_ok,    ft5_sheets_err    = log_to_sheets(ft5_row,    st.secrets["GOOGLE_SHEETS_ID"])        if (send_ft5_sheet and not use_kespa) else (None, None)
         winner_sheets_ok, winner_sheets_err = log_to_sheets(winner_row, st.secrets["GOOGLE_WINNER_SHEETS_ID"]) if send_win_sheet else (None, None)
 
         win_edge_d  = max(win_blue_edge, win_red_edge) * 100
@@ -1159,7 +1305,7 @@ if predict_btn:
         ft5_conf_txt, ft5_bg, ft5_fg, ft5_br = conf_display(ft5_conf_level)
 
         win_pick_show = win_pick_units > 0
-        ft5_pick_show = ft5_pick_units > 0
+        ft5_pick_show = ft5_pick_units > 0 and not use_kespa
         win_pick_edge = win_blue_edge if blue_win_conf > red_win_conf else win_red_edge
         ft5_pick_edge = ft5_blue_edge if blue_ft5_conf > red_ft5_conf else ft5_red_edge
 
@@ -1168,7 +1314,9 @@ if predict_btn:
         else:
             win_rec_str = f"{win_winner} WIN &middot; SKIP (edge {win_pick_edge*100:.1f}%)"
 
-        if ft5_pick_show:
+        if use_kespa:
+            ft5_rec_str = "FT5 &middot; disabled for cross-tier (KeSPA) games"
+        elif ft5_pick_show:
             ft5_rec_str = f"{ft5_winner} FT5 &middot; {ft5_pick_units}u {ft5_pick_label} &middot; @{ft5_pick_odds} &middot; est ~{est_time:.1f} min"
         else:
             ft5_rec_str = f"{ft5_winner} FT5 &middot; SKIP (edge {ft5_pick_edge*100:.1f}%)"
@@ -1487,7 +1635,7 @@ if predict_btn:
         status_parts = []
         if send_discord:
             status_parts.append("📨 Discord sent" if discord_sent else "⚠️ Discord failed")
-        if send_ft5_sheet:
+        if send_ft5_sheet and not use_kespa:
             status_parts.append("📊 FT5 logged" if ft5_sheets_ok is True else "⚠️ FT5 sheet failed")
         if send_win_sheet:
             status_parts.append("🏆 Winner logged" if winner_sheets_ok is True else "⚠️ Winner sheet failed")
