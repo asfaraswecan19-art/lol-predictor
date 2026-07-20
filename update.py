@@ -131,7 +131,22 @@ if not data_changed:
 try:
     import pandas as pd
     df = pd.read_csv(FILE_2026)
-    tier1 = ['LCK', 'LPL', 'LEC', 'LCS', 'MSI', 'WLDs', 'FST']
+    # Pull the REAL T1 league list from build_dataset.py rather than keeping a
+    # separate hardcoded copy here. The old hardcoded list was missing EWC (and
+    # others), so newly-added leagues silently never appeared as "latest match"
+    # even though they were in the data and the model.
+    # NOTE: we PARSE the list out of the source rather than `import`-ing it --
+    # build_dataset.py runs its build on import (no __main__ guard), so importing
+    # would kick off a full rebuild just to read a constant.
+    tier1 = ['LCK','LPL','LEC','LCS','CBLOL','MSI','WLDs','EWC','LTA N','LTA S','LTA','FST']
+    try:
+        import ast, re as _re
+        _src = open('build_dataset.py', encoding='utf-8').read()
+        _m = _re.search(r'TARGET_LEAGUES_T1\s*=\s*(\[[^\]]*\])', _src)
+        if _m:
+            tier1 = ast.literal_eval(_m.group(1))
+    except Exception:
+        pass  # fall back to the inline list above
     if 'league' in df.columns and 'date' in df.columns:
         df['date'] = pd.to_datetime(df['date'], errors='coerce')
         t1 = df[df['league'].isin(tier1)].dropna(subset=['date'])
