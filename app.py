@@ -466,6 +466,22 @@ def fuzzy_match_team(raw):
     matches   = difflib.get_close_matches(raw_clean, team_map.keys(), n=1, cutoff=0.7)
     return (team_map[matches[0]], False) if matches else (None, False)
 
+def fuzzy_match_team_in(raw, teams):
+    """Like fuzzy_match_team but searches a SPECIFIC team list. Used in KeSPA
+    mode so each side matches against its own tier's teams (the global
+    fuzzy_match_team only knows the selected payload's teams, which is why
+    academy names didn't resolve on the KeSPA tab)."""
+    if not raw or not raw.strip(): return None, False
+    raw_strip = raw.strip()
+    normed = normalize_team(raw_strip)
+    if normed != raw_strip and normed in teams: return normed, True
+    for t in teams:
+        if raw_strip.lower() == t.lower(): return t, True
+    raw_clean = raw_strip.lower().replace(" ","")
+    team_map  = {t.lower().replace(" ",""): t for t in teams}
+    matches   = difflib.get_close_matches(raw_clean, team_map.keys(), n=1, cutoff=0.7)
+    return (team_map[matches[0]], False) if matches else (None, False)
+
 def parse_champion_input(text):
     """Returns (champs: list[str], fuzzy_flags: list[bool]) -- fuzzy_flags[i]
     is True if champs[i] was a non-exact (guessed) match, so the UI can
@@ -870,9 +886,19 @@ with col1:
         blue_kespa_tier = 'T2' if 'T2' in blue_kespa_tier else 'T1'
     blue_team_raw   = st.text_input("Team name", key='blue_team_input',
                                      placeholder="e.g. T1, Gen.G, Cloud9...", label_visibility="collapsed")
-    blue_team_match, blue_team_exact = fuzzy_match_team(blue_team_raw) if blue_team_raw else (None, False)
-    if blue_team_match and blue_team_match in team_lineups:
-        lineup = team_lineups[blue_team_match]
+    # In KeSPA mode, match/autofill against the side's CHOSEN tier payload,
+    # not the global one (which only knows T1 teams). Otherwise academy names
+    # never resolve and lineups don't fill.
+    if use_kespa:
+        _bpay = p_t2 if blue_kespa_tier == 'T2' else p_t1
+        _b_teams = _bpay.get('all_teams', [])
+        _b_lineups = _bpay.get('team_lineups', {})
+        blue_team_match, blue_team_exact = fuzzy_match_team_in(blue_team_raw, _b_teams) if blue_team_raw else (None, False)
+    else:
+        _b_lineups = team_lineups
+        blue_team_match, blue_team_exact = fuzzy_match_team(blue_team_raw) if blue_team_raw else (None, False)
+    if blue_team_match and blue_team_match in _b_lineups:
+        lineup = _b_lineups[blue_team_match]
         if isinstance(lineup, dict):
             if not st.session_state['blue_p_top']: st.session_state['blue_p_top'] = lineup.get('top','')
             if not st.session_state['blue_p_jg']:  st.session_state['blue_p_jg']  = lineup.get('jng','')
@@ -922,9 +948,16 @@ with col2:
         red_kespa_tier = 'T2' if 'T2' in red_kespa_tier else 'T1'
     red_team_raw   = st.text_input("Team name", key='red_team_input',
                                     placeholder="e.g. T1, Gen.G, Cloud9...", label_visibility="collapsed")
-    red_team_match, red_team_exact = fuzzy_match_team(red_team_raw) if red_team_raw else (None, False)
-    if red_team_match and red_team_match in team_lineups:
-        lineup = team_lineups[red_team_match]
+    if use_kespa:
+        _rpay = p_t2 if red_kespa_tier == 'T2' else p_t1
+        _r_teams = _rpay.get('all_teams', [])
+        _r_lineups = _rpay.get('team_lineups', {})
+        red_team_match, red_team_exact = fuzzy_match_team_in(red_team_raw, _r_teams) if red_team_raw else (None, False)
+    else:
+        _r_lineups = team_lineups
+        red_team_match, red_team_exact = fuzzy_match_team(red_team_raw) if red_team_raw else (None, False)
+    if red_team_match and red_team_match in _r_lineups:
+        lineup = _r_lineups[red_team_match]
         if isinstance(lineup, dict):
             if not st.session_state['red_p_top']: st.session_state['red_p_top'] = lineup.get('top','')
             if not st.session_state['red_p_jg']:  st.session_state['red_p_jg']  = lineup.get('jng','')
@@ -1036,27 +1069,12 @@ if predict_btn:
 
         if use_kespa:
             # KeSPA: pull each side's stats from ITS chosen tier's payload.
-            # Team names are matched against that payload's team list.
+            # Reuse the tier-aware matches computed during autofill above, so
+            # the team the prediction uses is exactly the one shown to the user.
             _bp = p_t2 if blue_kespa_tier == 'T2' else p_t1
             _rp = p_t2 if red_kespa_tier  == 'T2' else p_t1
-            _b_norm = None
-            if blue_team_raw.strip():
-                for t in _bp['all_teams']:
-                    if blue_team_raw.strip().lower() == t.lower(): _b_norm = t; break
-                if _b_norm is None:
-                    import difflib as _dl
-                    _m = _dl.get_close_matches(blue_team_raw.strip().lower(),
-                            {t.lower():t for t in _bp['all_teams']}.keys(), n=1, cutoff=0.7)
-                    if _m: _b_norm = {t.lower():t for t in _bp['all_teams']}[_m[0]]
-            _r_norm = None
-            if red_team_raw.strip():
-                for t in _rp['all_teams']:
-                    if red_team_raw.strip().lower() == t.lower(): _r_norm = t; break
-                if _r_norm is None:
-                    import difflib as _dl
-                    _m = _dl.get_close_matches(red_team_raw.strip().lower(),
-                            {t.lower():t for t in _rp['all_teams']}.keys(), n=1, cutoff=0.7)
-                    if _m: _r_norm = {t.lower():t for t in _rp['all_teams']}[_m[0]]
+            _b_norm = blue_team_match
+            _r_norm = red_team_match
 
             _bs = kespa_side_stats(_bp, _b_norm, blue, blue_players)
             _rs = kespa_side_stats(_rp, _r_norm, red,  red_players)
