@@ -358,6 +358,14 @@ team_avg_gamelength  = p.get('team_avg_gamelength', {})
 team_avg_kills       = p.get('team_avg_kills', {})
 ft5_h2h          = p['ft5_h2h']
 ft5_team_recent  = p['ft5_team_recent']
+# ── FT10 (first to 10 kills) — guarded: older payloads won't have these ──
+ft10_model            = p.get('ft10_model')
+ft10_mlb              = p.get('ft10_mlb')
+champ_aggression_ft10 = p.get('champ_aggression_ft10', {})
+team_ft10_rate        = p.get('team_ft10_rate', {})
+ft10_h2h              = p.get('ft10_h2h', {})
+ft10_team_recent      = p.get('ft10_team_recent', {})
+ft10_available        = ft10_model is not None and ft10_mlb is not None
 ft5_team_games   = p['ft5_team_games']
 team_lineups     = p.get('team_lineups', {})
 all_teams        = p['all_teams']
@@ -463,6 +471,22 @@ def fuzzy_match_team(raw):
         if raw_strip.lower() == t.lower(): return t, True
     raw_clean = raw_strip.lower().replace(" ","")
     team_map  = {t.lower().replace(" ",""): t for t in all_teams}
+    matches   = difflib.get_close_matches(raw_clean, team_map.keys(), n=1, cutoff=0.7)
+    return (team_map[matches[0]], False) if matches else (None, False)
+
+def fuzzy_match_team_in(raw, teams):
+    """Like fuzzy_match_team but searches a SPECIFIC team list. Used in KeSPA
+    mode so each side matches against its own tier's teams (the global
+    fuzzy_match_team only knows the selected payload's teams, which is why
+    academy names didn't resolve on the KeSPA tab)."""
+    if not raw or not raw.strip(): return None, False
+    raw_strip = raw.strip()
+    normed = normalize_team(raw_strip)
+    if normed != raw_strip and normed in teams: return normed, True
+    for t in teams:
+        if raw_strip.lower() == t.lower(): return t, True
+    raw_clean = raw_strip.lower().replace(" ","")
+    team_map  = {t.lower().replace(" ",""): t for t in teams}
     matches   = difflib.get_close_matches(raw_clean, team_map.keys(), n=1, cutoff=0.7)
     return (team_map[matches[0]], False) if matches else (None, False)
 
@@ -870,9 +894,19 @@ with col1:
         blue_kespa_tier = 'T2' if 'T2' in blue_kespa_tier else 'T1'
     blue_team_raw   = st.text_input("Team name", key='blue_team_input',
                                      placeholder="e.g. T1, Gen.G, Cloud9...", label_visibility="collapsed")
-    blue_team_match, blue_team_exact = fuzzy_match_team(blue_team_raw) if blue_team_raw else (None, False)
-    if blue_team_match and blue_team_match in team_lineups:
-        lineup = team_lineups[blue_team_match]
+    # In KeSPA mode, match/autofill against the side's CHOSEN tier payload,
+    # not the global one (which only knows T1 teams). Otherwise academy names
+    # never resolve and lineups don't fill.
+    if use_kespa:
+        _bpay = p_t2 if blue_kespa_tier == 'T2' else p_t1
+        _b_teams = _bpay.get('all_teams', [])
+        _b_lineups = _bpay.get('team_lineups', {})
+        blue_team_match, blue_team_exact = fuzzy_match_team_in(blue_team_raw, _b_teams) if blue_team_raw else (None, False)
+    else:
+        _b_lineups = team_lineups
+        blue_team_match, blue_team_exact = fuzzy_match_team(blue_team_raw) if blue_team_raw else (None, False)
+    if blue_team_match and blue_team_match in _b_lineups:
+        lineup = _b_lineups[blue_team_match]
         if isinstance(lineup, dict):
             if not st.session_state['blue_p_top']: st.session_state['blue_p_top'] = lineup.get('top','')
             if not st.session_state['blue_p_jg']:  st.session_state['blue_p_jg']  = lineup.get('jng','')
@@ -922,9 +956,16 @@ with col2:
         red_kespa_tier = 'T2' if 'T2' in red_kespa_tier else 'T1'
     red_team_raw   = st.text_input("Team name", key='red_team_input',
                                     placeholder="e.g. T1, Gen.G, Cloud9...", label_visibility="collapsed")
-    red_team_match, red_team_exact = fuzzy_match_team(red_team_raw) if red_team_raw else (None, False)
-    if red_team_match and red_team_match in team_lineups:
-        lineup = team_lineups[red_team_match]
+    if use_kespa:
+        _rpay = p_t2 if red_kespa_tier == 'T2' else p_t1
+        _r_teams = _rpay.get('all_teams', [])
+        _r_lineups = _rpay.get('team_lineups', {})
+        red_team_match, red_team_exact = fuzzy_match_team_in(red_team_raw, _r_teams) if red_team_raw else (None, False)
+    else:
+        _r_lineups = team_lineups
+        red_team_match, red_team_exact = fuzzy_match_team(red_team_raw) if red_team_raw else (None, False)
+    if red_team_match and red_team_match in _r_lineups:
+        lineup = _r_lineups[red_team_match]
         if isinstance(lineup, dict):
             if not st.session_state['red_p_top']: st.session_state['red_p_top'] = lineup.get('top','')
             if not st.session_state['red_p_jg']:  st.session_state['red_p_jg']  = lineup.get('jng','')
@@ -965,7 +1006,7 @@ with col2:
     with pr3:
         red_p_mid = st.text_input("Mid", key='red_p_mid', placeholder="Mid")
 
-gc1, gc2, gc3, gc4 = st.columns([1, 1, 1, 1])
+gc1, gc2, gc3, gc4, gc5 = st.columns([1, 1, 1, 1, 1])
 with gc1:
     game_number = st.text_input("Game #", key='game_number', placeholder="1, 2, 3...")
 with gc2:
@@ -983,6 +1024,17 @@ with gc3:
     with fo2:
         ft5_red_odds  = st.number_input("Red",  min_value=1.01, max_value=10.0, value=1.95, step=0.05, key="fro")
 with gc4:
+    st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin-bottom:2px;">FT10 ODDS</div>', unsafe_allow_html=True)
+    if ft10_available and not use_kespa:
+        f10a, f10b = st.columns(2)
+        with f10a:
+            ft10_blue_odds = st.number_input("Blue", min_value=1.01, max_value=10.0, value=1.85, step=0.05, key="f10bo")
+        with f10b:
+            ft10_red_odds  = st.number_input("Red",  min_value=1.01, max_value=10.0, value=1.95, step=0.05, key="f10ro")
+    else:
+        ft10_blue_odds = 1.85; ft10_red_odds = 1.95
+        st.markdown('<div style="color:#2a3a4a;font-size:9px;font-family:monospace;margin-top:4px;">n/a</div>', unsafe_allow_html=True)
+with gc5:
     st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin-bottom:2px;">LOG TO</div>', unsafe_allow_html=True)
     send_discord   = st.checkbox("Discord",   value=True)
     send_ft5_sheet = st.checkbox("FT5 Sheet", value=True)
@@ -1036,27 +1088,12 @@ if predict_btn:
 
         if use_kespa:
             # KeSPA: pull each side's stats from ITS chosen tier's payload.
-            # Team names are matched against that payload's team list.
+            # Reuse the tier-aware matches computed during autofill above, so
+            # the team the prediction uses is exactly the one shown to the user.
             _bp = p_t2 if blue_kespa_tier == 'T2' else p_t1
             _rp = p_t2 if red_kespa_tier  == 'T2' else p_t1
-            _b_norm = None
-            if blue_team_raw.strip():
-                for t in _bp['all_teams']:
-                    if blue_team_raw.strip().lower() == t.lower(): _b_norm = t; break
-                if _b_norm is None:
-                    import difflib as _dl
-                    _m = _dl.get_close_matches(blue_team_raw.strip().lower(),
-                            {t.lower():t for t in _bp['all_teams']}.keys(), n=1, cutoff=0.7)
-                    if _m: _b_norm = {t.lower():t for t in _bp['all_teams']}[_m[0]]
-            _r_norm = None
-            if red_team_raw.strip():
-                for t in _rp['all_teams']:
-                    if red_team_raw.strip().lower() == t.lower(): _r_norm = t; break
-                if _r_norm is None:
-                    import difflib as _dl
-                    _m = _dl.get_close_matches(red_team_raw.strip().lower(),
-                            {t.lower():t for t in _rp['all_teams']}.keys(), n=1, cutoff=0.7)
-                    if _m: _r_norm = {t.lower():t for t in _rp['all_teams']}[_m[0]]
+            _b_norm = blue_team_match
+            _r_norm = red_team_match
 
             _bs = kespa_side_stats(_bp, _b_norm, blue, blue_players)
             _rs = kespa_side_stats(_rp, _r_norm, red,  red_players)
@@ -1180,6 +1217,50 @@ if predict_btn:
             blue_ft5_conf = min(max(ft5_prob_raw[1], 0.05), 0.95)
             red_ft5_conf  = min(max(ft5_prob_raw[0], 0.05), 0.95)
 
+        # ── FT10 prediction (first to 10 kills) ──
+        # Mirrors FT5 but uses the FT10 payload stats and DROPS kill_speed
+        # (it overfits). Disabled in KeSPA (cross-tier) and when the loaded
+        # payload has no FT10 model (older payload / Path B).
+        blue_ft10_conf = red_ft10_conf = 0.5
+        ft10_shown = ft10_available and not use_kespa
+        if ft10_shown:
+            if len(blue) == 5:
+                b_ft10_enc = pd.DataFrame(ft10_mlb.transform([blue]),
+                    columns=['blue_' + c for c in ft10_mlb.classes_])
+            else:
+                b_ft10_enc = pd.DataFrame([[0]*len(ft10_mlb.classes_)],
+                    columns=['blue_' + c for c in ft10_mlb.classes_])
+            if len(red) == 5:
+                r_ft10_enc = pd.DataFrame(ft10_mlb.transform([red]),
+                    columns=['red_' + c for c in ft10_mlb.classes_])
+            else:
+                r_ft10_enc = pd.DataFrame([[0]*len(ft10_mlb.classes_)],
+                    columns=['red_' + c for c in ft10_mlb.classes_])
+            b10_agg = sum(champ_aggression_ft10.get(c,0.5) for c in blue)/len(blue) if blue else 0.5
+            r10_agg = sum(champ_aggression_ft10.get(c,0.5) for c in red) /len(red)  if red  else 0.5
+            b10_early = team_ft10_rate.get(blue_team_norm,0.5) if blue_team_norm else 0.5
+            r10_early = team_ft10_rate.get(red_team_norm, 0.5) if red_team_norm  else 0.5
+            ft10_h2h_r = get_h2h_rate(ft10_h2h, blue_team_norm, red_team_norm) \
+                         if blue_team_norm and red_team_norm else 0.5
+            b10_form = get_form(ft10_team_recent, blue_team_norm) if blue_team_norm else 0.5
+            r10_form = get_form(ft10_team_recent, red_team_norm)  if red_team_norm  else 0.5
+            ft10_extra = pd.DataFrame([[
+                b10_agg, r10_agg, b10_agg-r10_agg,
+                b10_early, r10_early, b10_early-r10_early,
+                ft10_h2h_r,
+                b10_form, r10_form, b10_form-r10_form,
+            ]], columns=[
+                'blue_aggression','red_aggression','aggression_diff',
+                'blue_early_rate','red_early_rate','early_rate_diff',
+                'h2h_early_rate',
+                'blue_early_form','red_early_form','early_form_diff',
+            ])
+            _ft10_df = pd.concat([b_ft10_enc, r_ft10_enc, ft10_extra], axis=1)
+            verify_feature_order(ft10_model, _ft10_df, "FT10")
+            ft10_prob_raw  = ft10_model.predict_proba(_ft10_df)[0]
+            blue_ft10_conf = min(max(ft10_prob_raw[1], 0.05), 0.95)
+            red_ft10_conf  = min(max(ft10_prob_raw[0], 0.05), 0.95)
+
         if len(blue)==5 and len(red)==5:
             bdw, rdw, bdf, rdf = get_draft_only_prediction(
                 blue, red, b_champ_wr, r_champ_wr, b_pc_avg, r_pc_avg)
@@ -1191,6 +1272,9 @@ if predict_btn:
         win_red_edge,  win_red_units,  win_red_label,  win_red_impl  = calc_edge(red_win_conf,  win_red_odds, _cap)
         ft5_blue_edge, ft5_blue_units, ft5_blue_label, ft5_blue_impl = calc_edge(blue_ft5_conf, ft5_blue_odds, _cap)
         ft5_red_edge,  ft5_red_units,  ft5_red_label,  ft5_red_impl  = calc_edge(red_ft5_conf,  ft5_red_odds, _cap)
+        if ft10_shown:
+            ft10_blue_edge, ft10_blue_units, ft10_blue_label, ft10_blue_impl = calc_edge(blue_ft10_conf, ft10_blue_odds, _cap)
+            ft10_red_edge,  ft10_red_units,  ft10_red_label,  ft10_red_impl  = calc_edge(red_ft10_conf,  ft10_red_odds, _cap)
 
         if use_kespa:
             st.markdown(
@@ -1327,6 +1411,47 @@ if predict_btn:
         ft5_pick_color  = '#60a0f0' if ft5_pick_show else '#4a5a7a'
         ft5_pick_bg     = '#05101f' if ft5_pick_show else '#0f1218'
         ft5_pick_border = '#103a6a' if ft5_pick_show else '#1e2535'
+
+        # ── FT10 display card (only when the model produced an FT10 prediction) ──
+        ft10_html = ""
+        if ft10_shown:
+            ft10_winner = blue_team_name if blue_ft10_conf > red_ft10_conf else red_team_name
+            ft10_pick_units = ft10_blue_units if blue_ft10_conf > red_ft10_conf else ft10_red_units
+            ft10_pick_label = ft10_blue_label if blue_ft10_conf > red_ft10_conf else ft10_red_label
+            ft10_pick_odds  = ft10_blue_odds  if blue_ft10_conf > red_ft10_conf else ft10_red_odds
+            ft10_pick_edge  = ft10_blue_edge  if blue_ft10_conf > red_ft10_conf else ft10_red_edge
+            ft10_pick_show  = ft10_pick_units > 0
+            if ft10_pick_show:
+                ft10_rec_str = f"{ft10_winner} FT10 &middot; {ft10_pick_units}u {ft10_pick_label} &middot; @{ft10_pick_odds}"
+            else:
+                ft10_rec_str = f"{ft10_winner} FT10 &middot; SKIP (edge {ft10_pick_edge*100:.1f}%)"
+            _f10_pc = '#60c0a0' if ft10_pick_show else '#4a5a7a'
+            _f10_bg = '#05201a' if ft10_pick_show else '#0f1218'
+            _f10_bd = '#106a4a' if ft10_pick_show else '#1e2535'
+            _f10_badge_bg = '#0a3a2a' if ft10_pick_show else '#1a1e28'
+            _f10_badge_fg = '#40c090' if ft10_pick_show else '#4a5a7a'
+            ft10_html = f"""
+  <div style="border-top:1px solid #1e2535;margin:14px 0;"></div>
+  <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:6px;">FIRST TO TEN KILLS</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px;">
+    <div style="background:#0f1218;border:1px solid #1e2535;border-radius:5px;padding:10px 12px;">
+      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:4px;">BLUE &middot; {blue_team_name}</div>
+      <div style="font-size:22px;font-weight:700;color:#40c090;line-height:1;">{blue_ft10_conf*100:.1f}%</div>
+      <div style="margin-top:5px;font-size:10px;color:#3a4a6a;">odds {ft10_blue_odds} &middot; impl {ft10_blue_impl*100:.1f}% &middot; edge {'+' if ft10_blue_edge>=0 else ''}{ft10_blue_edge*100:.1f}%</div>
+    </div>
+    <div style="background:#0f1218;border:1px solid #1e2535;border-radius:5px;padding:10px 12px;">
+      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:4px;">RED &middot; {red_team_name}</div>
+      <div style="font-size:22px;font-weight:700;color:#40c090;line-height:1;">{red_ft10_conf*100:.1f}%</div>
+      <div style="margin-top:5px;font-size:10px;color:#3a4a6a;">odds {ft10_red_odds} &middot; impl {ft10_red_impl*100:.1f}% &middot; edge {'+' if ft10_red_edge>=0 else ''}{ft10_red_edge*100:.1f}%</div>
+    </div>
+  </div>
+  <div style="background:{_f10_bg};border:1px solid {_f10_bd};border-radius:5px;padding:9px 14px;display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
+    <div>
+      <div style="font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:{'#2a9070' if ft10_pick_show else '#3a4a6a'};">RECOMMENDED BET &mdash; FIRST TO TEN</div>
+      <div style="font-size:14px;font-weight:700;color:{_f10_pc};margin-top:2px;">{ft10_rec_str}</div>
+    </div>
+    <span style="background:{_f10_badge_bg};color:{_f10_badge_fg};border:1px solid {_f10_bd};font-size:11px;padding:4px 12px;border-radius:3px;font-weight:700;">{'PICK' if ft10_pick_show else 'SKIP'}</span>
+  </div>"""
 
         def draft_rows_html(picks, players):
             if not picks: return '<div style="color:#3a4060;font-size:10px;">No picks entered</div>'
@@ -1503,6 +1628,7 @@ if predict_btn:
     <span style="background:{ft5_bg};color:{ft5_fg};border:1px solid {ft5_br};font-size:11px;padding:4px 12px;border-radius:3px;font-weight:700;">{'PICK' if ft5_pick_show else 'SKIP'}</span>
   </div>
   {draft_ft5_cap}
+  {ft10_html}
 
   <div style="border-top:1px solid #1e2535;margin:14px 0;"></div>
 
