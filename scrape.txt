@@ -1,0 +1,2 @@
+Games to process this session: 500
+Starting kill extraction with 12 parallel workers. First games take ~30-45 sec each.

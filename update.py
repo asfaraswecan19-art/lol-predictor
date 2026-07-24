@@ -163,14 +163,89 @@ with open(HASH_FILE_T1, 'w') as f: f.write(current_hash_t1)
 with open(HASH_FILE_T2, 'w') as f: f.write(current_hash_t2)
 
 # =================================================================
+# SCRAPE — lolesports kill data  [DISABLED]
+# =================================================================
+# TURNED OFF because nothing in the live pipeline consumes it anymore.
+# This chain exists to build PRECISE FT5/FT10 labels from 10-second kill
+# timelines. Both consumers are now switched off:
+#   - FT10 tested at -1.48% edge out-of-sample (not predictable). Dropped.
+#   - Precise FT5 scored 49.11% vs the proxy's 55.82%. Reverted to Path B,
+#     which builds FT5 from kill_timelines.csv (Oracle's Elixir) instead.
+# The win model never used this data at all.
+#
+# The scrape costs HOURS (~140-200 sequential API requests per game, and the
+# 10s cursor step is genuinely required -- a window request returns ~10 frames
+# spanning 1 second). Running it weekly for data nothing reads is pure waste.
+#
+# TO RE-ENABLE (e.g. to test another kill-timing market): set RUN_SCRAPE = True.
+# Already-scraped games are on disk and the scrape is checkpoint-safe, so it
+# resumes from ~62.7% coverage rather than starting over.
+RUN_SCRAPE = False
+
+if RUN_SCRAPE:
+    print("\n" + "="*55)
+    print("  SCRAPE: lolesports kill data")
+    print("="*55)
+    # --tier1 restricts fetch_game_ids.py and fetch_kills.py to modeled leagues
+    # (see TIER1_LEAGUES in those files), skipping ~20 leagues we don't use.
+    _scrape_chain = [
+        ("fetch_schedule.py",  "",         "Fetching match schedule"),
+        ("fetch_game_ids.py",  "--tier1",  "Fetching game IDs (target leagues only)"),
+        ("fetch_kills.py",     "--tier1",  "Scraping kill timelines (target leagues only)"),
+    ]
+    for _script, _args, _desc in _scrape_chain:
+        if os.path.exists(_script):
+            _cmd = f'"{PYTHON}" {_script} {_args}'.strip()
+            run_soft(_cmd, _desc)
+        else:
+            print(f"\n⚠️  {_script} not found -- skipping.")
+else:
+    print("\n  (kill-timeline scrape disabled — set RUN_SCRAPE=True to re-enable)")
+
+# =================================================================
 # REBUILD CSVs
 # =================================================================
 run(f'"{PYTHON}" build_dataset.py', "Rebuilding datasets (T1 + T2)")
 
 # =================================================================
+# PRECISE LABELS (FT5 + FT10)  [DISABLED — tied to RUN_SCRAPE above]
+# =================================================================
+# Only Path A (train_and_save.py) reads precise_labels.csv. We're on Path B,
+# which builds FT5 from kill_timelines.csv instead, so these steps produce a
+# file nothing reads. Re-enabled automatically if RUN_SCRAPE is set to True.
+if RUN_SCRAPE:
+    if os.path.exists("build_gameid_bridge.py") and os.path.exists("build_precise_labels.py"):
+        b_ok = run_soft(f'"{PYTHON}" build_gameid_bridge.py', "Building game-id bridge (JSON<->proplay)")
+        if b_ok:
+            run_soft(f'"{PYTHON}" build_precise_labels.py', "Building precise FT5+FT10 labels")
+        else:
+            print("    Bridge failed -- keeping existing precise_labels.csv if present.")
+    else:
+        print("\n⚠️  Precise-label scripts not found -- skipping.")
+
+# =================================================================
 # RETRAIN MODELS
 # =================================================================
-run(f'"{PYTHON}" train_and_save.py', "Retraining models (T1 + T2)")
+# PATH B is the active pipeline: proxy FT5 (kill_timelines.csv), LPL excluded,
+# no FT10. It writes model_payload_B.pkl / model_payload_t2_B.pkl, which we then
+# copy over the payloads app.py loads.
+#
+# Why Path B and not Path A: precise-label FT5 backtested at 49.11% (+1.40%
+# edge) vs the proxy's 55.82% (+2.59%), and FT10 came in at -1.48% edge, i.e.
+# not predictable. Path A (train_and_save.py) is kept on disk for reference.
+TRAIN_SCRIPT = "train_and_save_B.py" if os.path.exists("train_and_save_B.py") else "train_and_save.py"
+run(f'"{PYTHON}" {TRAIN_SCRIPT}', f"Retraining models ({TRAIN_SCRIPT})")
+
+# Path B writes _B payloads; app.py always loads model_payload.pkl, so promote
+# them. (No-op when running Path A, which writes the target names directly.)
+if TRAIN_SCRIPT == "train_and_save_B.py":
+    import shutil
+    for _src, _dst in [("model_payload_B.pkl", "model_payload.pkl"),
+                       ("model_payload_t2_B.pkl", "model_payload_t2.pkl")]:
+        if os.path.exists(_src):
+            shutil.copyfile(_src, _dst)
+            print(f"  Promoted {_src} -> {_dst}")
+
 
 # =================================================================
 # BACKTEST — must run AFTER train_and_save.py and BEFORE the push.
@@ -219,12 +294,21 @@ commit_result = os.system(f'git commit -m "{commit_msg}"')
 os.system('attrib -r .git\\FETCH_HEAD 2>nul')
 os.system("git add .")
 os.system('git commit -m "pre-pull sync" 2>nul')
-os.system("git pull origin main --no-rebase")
+
+# Make merges non-interactive so an auto-generated merge commit can't pop an
+# editor and hang the script ("Waiting for your editor to close"). Both the
+# config and the --no-edit flag are belt-and-suspenders: GIT_EDITOR=true makes
+# any editor invocation a no-op, and --no-edit accepts the default merge message.
+os.environ["GIT_EDITOR"] = "true"
+os.system("git config merge.ff false")
+pull_result = os.system("git pull origin main --no-rebase --no-edit")
+if pull_result != 0:
+    print("⚠️  git pull reported a problem (merge conflict?) — check before relying on the push.")
 push_result   = os.system("git push origin main")
 if push_result == 0:
     print("✅ Pushed to GitHub — Streamlit will redeploy in ~1 minute!")
 else:
-    print("❌ Push failed — check your git credentials")
+    print("❌ Push failed — check your git credentials (or a merge conflict from the pull above)")
 
 # =================================================================
 # SUMMARY

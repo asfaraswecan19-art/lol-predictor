@@ -42,8 +42,28 @@ MAX_PAGES_PER_GAME  = 240
 MAX_EMPTY_PAGES     = 5
 DEFAULT_WORKERS     = 4
 
-TIER1_LEAGUES = {'LCK','LPL','LEC','LCS','LCP','CBLOL','MSI','WLDs','Worlds',
-                 'FST','LTA N','LTA S','LTA','EMEA Masters'}
+# Stop paginating a game once BOTH sides have this many kills. FT5 needs 5 and
+# FT10 needs 10, so 10 captures both with nothing lost. Walking to the end of a
+# 35-minute game costs ~200 sequential 10s-step requests (~50s/game); stopping
+# at 10 kills typically cuts that by 2-4x. Set to None for full-game scraping
+# (needed only if you later want late-game kill data).
+EARLY_STOP_KILLS    = 10
+
+# Leagues we actually model, using the EXACT names the lolesports API returns
+# (verified against game_ids.csv). Passing --tier1 restricts the scrape to just
+# these. Keep this in sync with the same set in fetch_game_ids.py.
+#
+# MAINTENANCE: tuned to CURRENTLY-ACTIVE league names. If a league rebrands or a
+# new target league appears, add its exact API name here or it's silently
+# skipped. Deliberately excluded: LCP (not modeled); LTA/LTA N/LTA S (defunct
+# LCS+CBLOL merger, historical games already in proplay); EWC (not needed);
+# NACL/LJL/TCL/VCS/etc. (not modeled).
+TIER1_LEAGUES = {
+    # ── T1 ──
+    'LCK', 'LPL', 'LEC', 'LCS', 'CBLOL', 'MSI', 'Worlds', 'First Stand',
+    # ── T2 ──
+    'LCK Challengers', 'La Ligue Française', 'EMEA Masters', 'Prime League',
+}
 
 _STOP_REQUESTED = False
 _print_lock = threading.Lock()
@@ -144,6 +164,18 @@ def extract_kills(game_id):
             if page_frames[-1].get('gameState') == 'finished':
                 finished_seen = True
                 break
+            # EARLY STOP: we only need the first EARLY_STOP_KILLS kills per side
+            # (FT5 needs 5, FT10 needs 10). Walking a full 35-min game costs
+            # ~200 sequential requests; the 10th kill usually lands well inside
+            # the first 20 minutes. Stopping here is the difference between
+            # ~50s/game and ~15s/game with ZERO loss to FT5/FT10 labels.
+            # Set EARLY_STOP_KILLS = None to restore full-game scraping.
+            if EARLY_STOP_KILLS is not None:
+                _lf = page_frames[-1]
+                _b = (_lf.get('blueTeam', {}) or {}).get('totalKills', 0) or 0
+                _r = (_lf.get('redTeam',  {}) or {}).get('totalKills', 0) or 0
+                if _b >= EARLY_STOP_KILLS and _r >= EARLY_STOP_KILLS:
+                    break
         else:
             consecutive_empty += 1
 
@@ -189,10 +221,18 @@ def summarize(kills):
     blue = [k for k in kills if k['side']=='blue']
     red  = [k for k in kills if k['side']=='red']
     s = {
+        # NOTE: when EARLY_STOP_KILLS is set, scraping stops once both sides
+        # reach that many kills -- so these totals are TRUNCATED, not true
+        # full-game totals. 'truncated' below tells consumers which it is.
+        # FT5 (5th kill) and FT10 (10th kill) timings are unaffected.
         'blue_total_kills': len(blue),
         'red_total_kills':  len(red),
+        'truncated': EARLY_STOP_KILLS is not None,
+        'early_stop_kills': EARLY_STOP_KILLS,
         'blue_time_to_5':   blue[4]['t_secs']/60 if len(blue)>=5 and blue[4]['t_secs'] else None,
         'red_time_to_5':    red[4]['t_secs']/60  if len(red)>=5  and red[4]['t_secs']  else None,
+        'blue_time_to_10':  blue[9]['t_secs']/60 if len(blue)>=10 and blue[9]['t_secs'] else None,
+        'red_time_to_10':   red[9]['t_secs']/60  if len(red)>=10  and red[9]['t_secs']  else None,
         'blue_kills_at_10min': sum(1 for k in blue if (k['t_secs'] or 0) <= 600),
         'red_kills_at_10min':  sum(1 for k in red  if (k['t_secs'] or 0) <= 600),
         'blue_kills_at_15min': sum(1 for k in blue if (k['t_secs'] or 0) <= 900),

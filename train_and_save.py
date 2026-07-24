@@ -3,6 +3,7 @@ warnings.filterwarnings('ignore')
 import pandas as pd
 import numpy as np
 import pickle
+import os
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.calibration import CalibratedClassifierCV
@@ -26,7 +27,15 @@ def normalize_team(name):
     return TEAM_ALIASES.get(str(name), str(name))
 
 WIN_DATA          = 'proplay_matches.csv'
-FT5_DATA          = 'kill_timelines.csv'
+
+# FT5 label source:
+#   'precise' -> precise_labels.csv (10s JSON kill data via bridge; correct labels)
+#   'proxy'   -> kill_timelines.csv (OE 5-min snapshots; Path B fallback, legacy)
+# We proved precise labels are correct (kills@10 adjudication, 77-23 vs proxy).
+# Flip to 'proxy' to revert to the old behavior for A/B comparison.
+FT5_LABEL_SOURCE  = 'precise'
+FT5_DATA          = 'precise_labels.csv' if FT5_LABEL_SOURCE == 'precise' else 'kill_timelines.csv'
+FT10_DATA         = 'precise_labels.csv'   # FT10 only exists in precise data
 FORM_WINDOW       = 8
 RECENT_WINDOW     = 20
 RECENT_WEIGHT     = 0.2
@@ -490,7 +499,28 @@ if 'Team Shifters' in win_team_games:
 ft5_df = pd.read_csv(FT5_DATA)
 ft5_df['blue_team'] = ft5_df['blue_team'].apply(normalize_team)
 ft5_df['red_team']  = ft5_df['red_team'].apply(normalize_team)
-ft5_df = ft5_df[~ft5_df['tournament'].isin(['LPL'])].copy().reset_index(drop=True)
+# The proxy had bad LPL FT5 labels (5-min buckets + firstblood), so LPL was
+# excluded. Precise labels are correct for LPL (kills@10 adjudication), so we
+# only drop LPL when running the proxy source.
+if FT5_LABEL_SOURCE == 'proxy':
+    ft5_df = ft5_df[~ft5_df['tournament'].isin(['LPL'])].copy().reset_index(drop=True)
+    print("  FT5 proxy source: excluding LPL (contaminated proxy labels)")
+else:
+    ft5_df = ft5_df.copy().reset_index(drop=True)
+    print(f"  FT5 precise source: {len(ft5_df)} rows (LPL included)")
+
+# Precise labels may have rows where a side never reached 5 kills -> null FT5.
+# Drop them (can't label FT5). Also ensure a 'year' column exists for the
+# recency half-life search (derive from proplay date if needed).
+if FT5_LABEL_SOURCE == 'precise':
+    _before = len(ft5_df)
+    ft5_df = ft5_df[ft5_df['first_to_five'].notna()].copy().reset_index(drop=True)
+    if _before != len(ft5_df):
+        print(f"  Dropped {_before-len(ft5_df)} rows with no FT5 label")
+    if 'year' not in ft5_df.columns:
+        _pp_dates = pd.read_csv(WIN_DATA, usecols=['game_id','date'])
+        _pp_dates['year'] = pd.to_datetime(_pp_dates['date'], errors='coerce').dt.year
+        ft5_df = ft5_df.merge(_pp_dates[['game_id','year']], on='game_id', how='left')
 ft5_df['blue_picks']   = ft5_df['blue_picks'].apply(lambda x: x.split(','))
 ft5_df['red_picks']    = ft5_df['red_picks'].apply(lambda x: x.split(','))
 ft5_df['blue_players'] = ft5_df['blue_players'].apply(lambda x: str(x).split(','))
@@ -665,6 +695,159 @@ ft5_model.fit(ft5_X_train, ft5_y_train, sample_weight=ft5_weights)
 print("✅ FT5 model trained")
 
 # =================================================================
+# FT10 MODEL  (first team to 10 kills)
+# =================================================================
+# Mirrors FT5 but: labels are 'first_to_ten' from the PRECISE data only
+# (no proxy exists for 10 kills), and the kill_speed feature is DROPPED
+# (it overfits -- proven on FT5). Same GBM hyperparams as FT5.
+# Guarded: if the precise labels file or FT10 column is absent, skip FT10
+# entirely and still save the win + FT5 models.
+ft10_model = None
+ft10_mlb = None
+champ_aggression_ft10 = {}
+team_ft10_rate = {}
+ft10_h2h = {}
+ft10_team_recent = {}
+ft10_val_acc = ft10_val_auc = None
+best_ft10_half_life = RECENCY_HALF_LIFE_YEARS
+
+_ft10_ok = os.path.exists(FT10_DATA)
+if _ft10_ok:
+    _probe = pd.read_csv(FT10_DATA, nrows=1)
+    _ft10_ok = 'first_to_ten' in _probe.columns
+if not _ft10_ok:
+    print(f"  FT10 skipped -- {FT10_DATA} missing or has no 'first_to_ten' column.")
+else:
+    ft10_df = pd.read_csv(FT10_DATA)
+    ft10_df['blue_team'] = ft10_df['blue_team'].apply(normalize_team)
+    ft10_df['red_team']  = ft10_df['red_team'].apply(normalize_team)
+    ft10_df['blue_picks']   = ft10_df['blue_picks'].apply(lambda x: str(x).split(','))
+    ft10_df['red_picks']    = ft10_df['red_picks'].apply(lambda x: str(x).split(','))
+    ft10_df['blue_players'] = ft10_df['blue_players'].apply(lambda x: str(x).split(','))
+    ft10_df['red_players']  = ft10_df['red_players'].apply(lambda x: str(x).split(','))
+    ft10_df = ft10_df[ft10_df['first_to_ten'].notna()].copy().reset_index(drop=True)
+    ft10_df['first_to_ten_binary'] = ft10_df['first_to_ten'].apply(lambda x: 1 if x == 'blue' else 0)
+
+    if 'ft10_ambiguous' in ft10_df.columns:
+        ft10_df['ft10_ambiguous'] = ft10_df['ft10_ambiguous'].fillna(0).astype(int)
+    else:
+        ft10_df['ft10_ambiguous'] = 0
+    if 'year' not in ft10_df.columns:
+        _pp_dates = pd.read_csv(WIN_DATA, usecols=['game_id','date'])
+        _pp_dates['year'] = pd.to_datetime(_pp_dates['date'], errors='coerce').dt.year
+        ft10_df = ft10_df.merge(_pp_dates[['game_id','year']], on='game_id', how='left')
+    print(f"  FT10 rows: {len(ft10_df)} (ambiguous {int((ft10_df['ft10_ambiguous']==1).sum())})")
+
+    # champ aggression (toward 10 kills)
+    _cw = {}; _cg = {}
+    for _, row in ft10_df.iterrows():
+        res = row['first_to_ten_binary']
+        for c in row['blue_picks']:
+            _cg[c] = _cg.get(c,0)+1; _cw[c] = _cw.get(c,0)+res
+        for c in row['red_picks']:
+            _cg[c] = _cg.get(c,0)+1; _cw[c] = _cw.get(c,0)+(1-res)
+    champ_aggression_ft10 = {c: _cw[c]/_cg[c] for c in _cg}
+
+    # team early-to-10 rate
+    _tw = {}; _tg = {}
+    for _, row in ft10_df.iterrows():
+        b, r = row['blue_team'], row['red_team']
+        _tg[b] = _tg.get(b,0)+1; _tg[r] = _tg.get(r,0)+1
+        _tw[b] = _tw.get(b,0)+row['first_to_ten_binary']
+        _tw[r] = _tw.get(r,0)+(1-row['first_to_ten_binary'])
+    team_ft10_rate = {t: _tw[t]/_tg[t] for t in _tg}
+
+    ft10_df['blue_aggression'] = ft10_df['blue_picks'].apply(
+        lambda picks: sum(champ_aggression_ft10.get(c,0.5) for c in picks)/len(picks))
+    ft10_df['red_aggression']  = ft10_df['red_picks'].apply(
+        lambda picks: sum(champ_aggression_ft10.get(c,0.5) for c in picks)/len(picks))
+    ft10_df['aggression_diff'] = ft10_df['blue_aggression'] - ft10_df['red_aggression']
+    ft10_df['blue_early_rate'] = ft10_df['blue_team'].map(team_ft10_rate)
+    ft10_df['red_early_rate']  = ft10_df['red_team'].map(team_ft10_rate)
+    ft10_df['early_rate_diff'] = ft10_df['blue_early_rate'] - ft10_df['red_early_rate']
+
+    # h2h (toward 10)
+    for _, row in ft10_df.iterrows():
+        b, r = row['blue_team'], row['red_team']
+        mk = tuple(sorted([b, r]))
+        if mk not in ft10_h2h: ft10_h2h[mk] = {}
+        ft10_h2h[mk][b] = ft10_h2h[mk].get(b,0)+row['first_to_ten_binary']
+        ft10_h2h[mk][r] = ft10_h2h[mk].get(r,0)+(1-row['first_to_ten_binary'])
+
+    # recency form
+    ft10_sorted = ft10_df.copy().reset_index(drop=True)
+    for idx, row in ft10_sorted.iterrows():
+        b, r = row['blue_team'], row['red_team']
+        ft10_team_recent.setdefault(b, []); ft10_team_recent.setdefault(r, [])
+        ft10_sorted.at[idx,'blue_early_form'] = weighted_form(ft10_team_recent[b], FORM_WINDOW)
+        ft10_sorted.at[idx,'red_early_form']  = weighted_form(ft10_team_recent[r], FORM_WINDOW)
+        ft10_team_recent[b].append(1 if row['first_to_ten_binary']==1 else 0)
+        ft10_team_recent[r].append(0 if row['first_to_ten_binary']==1 else 1)
+    ft10_df = ft10_sorted
+    ft10_df['early_form_diff'] = ft10_df['blue_early_form'] - ft10_df['red_early_form']
+    ft10_df['h2h_early_rate'] = ft10_df.apply(
+        lambda row: cap_h2h(
+            (ft10_h2h.get(tuple(sorted([row['blue_team'], row['red_team']])), {})
+             .get(row['blue_team'], 0)) /
+            max(sum(ft10_h2h.get(tuple(sorted([row['blue_team'], row['red_team']])), {}).values()), 1)), axis=1)
+
+    ft10_mlb = MultiLabelBinarizer()
+    ft10_mlb.fit(ft10_df['blue_picks'] + ft10_df['red_picks'])
+    _b_enc = pd.DataFrame(ft10_mlb.transform(ft10_df['blue_picks']),
+        columns=['blue_'+c for c in ft10_mlb.classes_]).reset_index(drop=True)
+    _r_enc = pd.DataFrame(ft10_mlb.transform(ft10_df['red_picks']),
+        columns=['red_'+c for c in ft10_mlb.classes_]).reset_index(drop=True)
+    # NOTE: no kill_speed features (they overfit -- proven on FT5)
+    ft10_extra = ft10_df[[
+        'blue_aggression','red_aggression','aggression_diff',
+        'blue_early_rate','red_early_rate','early_rate_diff',
+        'h2h_early_rate',
+        'blue_early_form','red_early_form','early_form_diff',
+    ]].reset_index(drop=True)
+    ft10_X = pd.concat([_b_enc, _r_enc, ft10_extra], axis=1)
+    ft10_y = ft10_df['first_to_ten_binary'].reset_index(drop=True)
+
+    ft10_train_mask = ft10_df['ft10_ambiguous'] == 0
+    print(f"  FT10 training on {ft10_train_mask.sum()} non-ambiguous games "
+          f"(dropped {(~ft10_train_mask).sum()} ambiguous)")
+
+    # recency half-life search (train ≤2024, val=2025), mirroring FT5
+    FT10_HALF_LIFE_GRID = [None, 1.0, 1.5, 2.0, 3.0]
+    if 'year' in ft10_df.columns:
+        _val = (ft10_df['year']==2025) & ft10_train_mask
+        _trv = (ft10_df['year']<=2024) & ft10_train_mask
+        if _val.sum() > 20 and _trv.sum() > 50:
+            _best = 0
+            print(f"\n  FT10 recency half-life search (train≤2024, val=2025)...")
+            for hl in FT10_HALF_LIFE_GRID:
+                w = (recency_weights_by_year(ft10_df['year'][_trv], hl) if hl is not None
+                     else np.ones(int(_trv.sum())))
+                _m = GradientBoostingClassifier(n_estimators=125, max_depth=1, learning_rate=0.03, random_state=42)
+                _m.fit(ft10_X[_trv], ft10_y[_trv], sample_weight=w)
+                _pr = _m.predict_proba(ft10_X[_val])[:,1]
+                _ac = float(((_pr>=0.5).astype(int)==ft10_y[_val].values).mean())
+                _au = float(_auc(ft10_y[_val], _pr))
+                mk = ' ← best' if _au > _best else ''
+                print(f"    half-life={(str(hl)+'y') if hl else 'none':<5}  Acc:{_ac*100:.2f}%  AUC:{_au:.4f}{mk}")
+                if _au > _best:
+                    _best = _au; ft10_val_acc = _ac; ft10_val_auc = _au; best_ft10_half_life = hl
+            _hd = f"{best_ft10_half_life}y" if best_ft10_half_life is not None else "none"
+            print(f"  Best FT10 recency half-life: {_hd} (val AUC: {ft10_val_auc:.4f})")
+        else:
+            print("  FT10 validation skipped -- not enough 2025 data yet")
+
+    _hd = f"{best_ft10_half_life}y" if best_ft10_half_life is not None else "none"
+    print(f"\nTraining FT10 model (recency half-life={_hd})...")
+    ft10_weights = (recency_weights_by_year(ft10_df['year'][ft10_train_mask], best_ft10_half_life)
+                    if best_ft10_half_life is not None
+                    else np.ones(int(ft10_train_mask.sum())))
+    ft10_base = GradientBoostingClassifier(n_estimators=125, max_depth=1, learning_rate=0.03, random_state=42)
+    ft10_model = CalibratedClassifierCV(ft10_base, method='isotonic', cv=5)
+    ft10_model.fit(ft10_X[ft10_train_mask], ft10_y[ft10_train_mask], sample_weight=ft10_weights)
+    print("✅ FT10 model trained")
+
+
+# =================================================================
 # SAVE
 # =================================================================
 # ── Data-driven fallback defaults for app.py ──
@@ -711,6 +894,14 @@ payload = {
     'team_avg_kills':      team_avg_kills,
     'ft5_h2h':          ft5_h2h,
     'ft5_team_recent':  ft5_team_recent,
+    # ── FT10 (first to 10 kills) — None if FT10 was skipped ──
+    'ft10_model':            ft10_model,
+    'ft10_mlb':              ft10_mlb,
+    'champ_aggression_ft10': champ_aggression_ft10,
+    'team_ft10_rate':        team_ft10_rate,
+    'ft10_h2h':              ft10_h2h,
+    'ft10_team_recent':      ft10_team_recent,
+    'ft10_label_source':     FT5_LABEL_SOURCE,
     'ft5_team_games':   ft5_team_games,
     'team_lineups':     team_lineups,
     'all_teams':        all_teams,

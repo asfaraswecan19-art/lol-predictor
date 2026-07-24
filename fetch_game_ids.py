@@ -23,8 +23,26 @@ OUT_FILE  = Path("game_ids.csv")
 STATE_FILE = Path("game_ids.state.json")
 SLEEP = 0.25  # gentler than schedule because per-call is cheap
 
-TIER1_LEAGUES = {'LCK','LPL','LEC','LCS','LCP','CBLOL','MSI','WLDs','Worlds',
-                 'FST','LTA N','LTA S','LTA','EMEA Masters'}
+# Leagues we actually model, using the EXACT names the lolesports API returns
+# (verified against game_ids.csv -- the API uses 'Worlds' not 'WLDs',
+# 'First Stand' not 'FST', 'LCK Challengers' not 'LCKC', etc.). Passing --tier1
+# restricts the scrape to just these, skipping ~25 leagues we don't use.
+#
+# MAINTENANCE: this is tuned to CURRENTLY-ACTIVE league names. If a league
+# rebrands or a new target league appears, add its exact API name here or it
+# will be silently skipped. Deliberately excluded:
+#   - LCP: not modeled (bridge was correctly dropping it)
+#   - LTA / LTA N / LTA S: defunct (was an LCS+CBLOL merger, no longer runs;
+#     historical games already live in proplay data, nothing new to scrape --
+#     LCS and CBLOL are back to being their own leagues)
+#   - EWC / Esports World Cup: not needed
+#   - NACL, LJL, TCL, VCS, Arabian League, etc.: not modeled
+TIER1_LEAGUES = {
+    # ── T1 ──
+    'LCK', 'LPL', 'LEC', 'LCS', 'CBLOL', 'MSI', 'Worlds', 'First Stand',
+    # ── T2 ──
+    'LCK Challengers', 'La Ligue Française', 'EMEA Masters', 'Prime League',
+}
 
 _STOP_REQUESTED = False
 def _handle_sigint(sig, frame):
