@@ -326,7 +326,7 @@ with st.spinner("Loading models..."):
 # Tier 2 tab would display T1's numbers.
 _header_slot = st.empty()
 
-st.markdown('<span style="color:#3a6a20;font-size:0.75rem;font-family:monospace;">&#9654; MODELS LOADED</span>', unsafe_allow_html=True)
+st.markdown('<span style="color:#4FD1AE;font-size:0.75rem;font-family:monospace;">&#9654; MODELS LOADED</span>', unsafe_allow_html=True)
 
 # ── Tier selector ──
 st.markdown('<div style="border-top:1px solid #2A3448;margin:8px 0 6px;"></div>', unsafe_allow_html=True)
@@ -1546,142 +1546,154 @@ if predict_btn:
         draft_only_str  = f"{(blue_team_name if bdw and bdw > rdw else red_team_name)[:5]} {max(bdw,rdw)*100:.1f}%" if bdw is not None else 'N/A'
         tier_badge      = 'T2' if use_t2 else 'T1'
 
+        _card = "background:#161D2E;border:1px solid #2A3448;border-radius:8px;"
+        _lbl  = "font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#8B93A7;margin-bottom:8px;"
+        win_card_border = '#C9A227' if win_pick_show else '#2A3448'
+        ft5_card_border = '#C9A227' if ft5_pick_show else '#2A3448'
+
         st.markdown(f"""
-<div style="background:#0E1420;border:1px solid #1e2330;border-radius:10px;padding:16px;
-     font-family:'JetBrains Mono','Fira Code','Consolas',monospace;font-size:12px;margin-top:16px;">
+<div style="background:#0E1420;border:1px solid #2A3448;border-radius:12px;padding:20px;
+     font-family:'Inter',sans-serif;margin-top:16px;">
 
   <div style="display:flex;align-items:center;justify-content:space-between;
-              border-bottom:1px solid #2A3448;padding-bottom:10px;margin-bottom:14px;">
-    <span style="color:#C9A227;font-size:13px;font-weight:700;letter-spacing:0.06em;">&#9672; LOL MATCH PREDICTOR v8 &middot; {tier_badge}</span>
-    <span style="background:#0F1A0F;color:#6db33f;font-size:10px;padding:2px 8px;border-radius:3px;border:1px solid #2a4a1a;">
-      {(league_detected or 'N/A').upper()}{game_lbl_html}
+              border-bottom:1px solid #2A3448;padding-bottom:12px;margin-bottom:16px;">
+    <span style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;color:#EDEFF4;">Prediction</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.05em;background:#0F1A0F;
+                 color:#4FD1AE;border:1px solid #2A4A1A;padding:3px 9px;border-radius:5px;">
+      {(league_detected or 'N/A').upper()}{game_lbl_html} &middot; {tier_badge}
     </span>
   </div>
 
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+  <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:18px;">
     <div>
-      <div style="font-size:15px;font-weight:700;color:#EDEFF4;">{blue_team_name}</div>
-      <div style="color:#8B93A7;margin-top:2px;font-size:11px;">BLUE &middot; {b_wr*100:.1f}% WR &middot; form {b_form*100:.0f}%</div>
+      <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:18px;color:#EDEFF4;">{blue_team_name}</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8B93A7;margin-top:3px;">
+        <span style="color:#5B8FD9;">&#9679;</span> BLUE &middot; {b_wr*100:.1f}% WR &middot; form {b_form*100:.0f}%
+      </div>
     </div>
-    <div style="color:#2A3448;font-size:11px;font-weight:700;padding:0 10px;">VS</div>
+    <div style="font-family:'JetBrains Mono',monospace;color:#2A3448;font-size:11px;font-weight:600;">VS</div>
     <div style="text-align:right;">
-      <div style="font-size:15px;font-weight:700;color:#EDEFF4;">{red_team_name}</div>
-      <div style="color:#8B93A7;margin-top:2px;font-size:11px;">RED &middot; {r_wr*100:.1f}% WR &middot; form {r_form*100:.0f}%</div>
+      <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:18px;color:#EDEFF4;">{red_team_name}</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8B93A7;margin-top:3px;">
+        RED &middot; {r_wr*100:.1f}% WR &middot; form {r_form*100:.0f}% <span style="color:#E2694B;">&#9679;</span>
+      </div>
     </div>
   </div>
 
-  <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#8B93A7;margin-bottom:6px;">DRAFT</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
-    <div style="background:#161D2E;border:1px solid #2A3448;border-left:2px solid #1e4a80;border-radius:5px;padding:8px 10px;">
-      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#2a5a90;margin-bottom:6px;">BLUE &middot; {blue_team_name}</div>
+  <div style="{_lbl}">Draft</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px;">
+    <div style="{_card}border-left:2px solid #5B8FD9;padding:10px 12px;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#5B8FD9;margin-bottom:6px;">Blue</div>
       {blue_draft_html}
     </div>
-    <div style="background:#161D2E;border:1px solid #2A3448;border-left:2px solid #801e1e;border-radius:5px;padding:8px 10px;">
-      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#903030;margin-bottom:6px;">RED &middot; {red_team_name}</div>
+    <div style="{_card}border-left:2px solid #E2694B;padding:10px 12px;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#E2694B;margin-bottom:6px;">Red</div>
       {red_draft_html}
     </div>
   </div>
 
-  <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#8B93A7;margin-bottom:6px;">MATCH WINNER</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px;">
-    <div style="background:#161D2E;border:1px solid #2A3448;border-radius:5px;padding:10px 12px;">
-      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#8B93A7;margin-bottom:4px;">BLUE &middot; {blue_team_name}</div>
-      <div style="font-size:22px;font-weight:700;color:#C9A227;line-height:1;">{blue_win_conf*100:.1f}%</div>
-      <div style="margin-top:5px;font-size:10px;color:#8B93A7;">odds {win_blue_odds} &middot; impl {win_blue_impl*100:.1f}% &middot; edge {'+' if win_blue_edge>=0 else ''}{win_blue_edge*100:.1f}%</div>
+  <div style="{_lbl}">Match winner</div>
+  <div style="{_card}border-color:{win_card_border};padding:14px 16px;margin-bottom:6px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:12px;">
+      <div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:0.08em;text-transform:uppercase;color:#8B93A7;margin-bottom:3px;">{blue_team_name}</div>
+        <div style="font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;color:#EDEFF4;line-height:1;">{blue_win_conf*100:.1f}%</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8B93A7;margin-top:6px;">odds {win_blue_odds} &middot; edge {'+' if win_blue_edge>=0 else ''}{win_blue_edge*100:.1f}%</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:0.08em;text-transform:uppercase;color:#8B93A7;margin-bottom:3px;">{red_team_name}</div>
+        <div style="font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;color:#EDEFF4;line-height:1;">{red_win_conf*100:.1f}%</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8B93A7;margin-top:6px;">odds {win_red_odds} &middot; edge {'+' if win_red_edge>=0 else ''}{win_red_edge*100:.1f}%</div>
+      </div>
     </div>
-    <div style="background:#161D2E;border:1px solid #2A3448;border-radius:5px;padding:10px 12px;">
-      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#8B93A7;margin-bottom:4px;">RED &middot; {red_team_name}</div>
-      <div style="font-size:22px;font-weight:700;color:#f06060;line-height:1;">{red_win_conf*100:.1f}%</div>
-      <div style="margin-top:5px;font-size:10px;color:#8B93A7;">odds {win_red_odds} &middot; impl {win_red_impl*100:.1f}% &middot; edge {'+' if win_red_edge>=0 else ''}{win_red_edge*100:.1f}%</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.08em;text-transform:uppercase;color:#8B93A7;">Confidence</span>
+      <span style="background:{win_bg};color:{win_fg};border:1px solid {win_br};font-family:'JetBrains Mono',monospace;font-size:9px;padding:2px 8px;border-radius:4px;font-weight:600;">{win_conf_txt}</span>
+      <span style="color:#8B93A7;font-size:10px;">&mdash; {win_conf_desc}</span>
     </div>
-  </div>
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-    <span style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#8B93A7;">MODEL CONFIDENCE</span>
-    <span style="background:{win_bg};color:{win_fg};border:1px solid {win_br};font-size:9px;padding:2px 8px;border-radius:3px;font-weight:700;">{win_conf_txt}</span>
-    <span style="color:#8B93A7;font-size:10px;">&mdash; {win_conf_desc}</span>
-  </div>
-  {win_caution_html}
-  <div style="background:{win_pick_bg};border:1px solid {win_pick_border};border-radius:5px;
-              padding:9px 14px;display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
-    <div>
-      <div style="font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:{'#4a8020' if win_pick_show else '#8B93A7'};">RECOMMENDED BET &mdash; MATCH WINNER</div>
-      <div style="font-size:14px;font-weight:700;color:{win_pick_color};margin-top:2px;">{win_rec_str}</div>
+    {win_caution_html}
+    <div style="border-top:1px solid #2A3448;padding-top:10px;margin-top:2px;display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:{'#C9A227' if win_pick_show else '#8B93A7'};">Recommended bet</div>
+        <div style="font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#EDEFF4;margin-top:3px;">{win_rec_str}</div>
+      </div>
+      <span style="background:{'#241C08' if win_pick_show else '#161D2E'};color:{'#C9A227' if win_pick_show else '#8B93A7'};border:1px solid {'#8A701F' if win_pick_show else '#2A3448'};font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 14px;border-radius:5px;font-weight:700;">{'PICK' if win_pick_show else 'SKIP'}</span>
     </div>
-    <span style="background:{win_bg};color:{win_fg};border:1px solid {win_br};font-size:11px;padding:4px 12px;border-radius:3px;font-weight:700;">{'PICK' if win_pick_show else 'SKIP'}</span>
   </div>
   {draft_win_cap}
 
-  <div style="border-top:1px solid #2A3448;margin:14px 0;"></div>
+  <div style="border-top:1px solid #2A3448;margin:18px 0;"></div>
 
-  <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#8B93A7;margin-bottom:6px;">FIRST TO FIVE KILLS</div>
+  <div style="{_lbl}">First to five kills</div>
   {red_signal_html}
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px;">
-    <div style="background:#161D2E;border:1px solid #2A3448;border-radius:5px;padding:10px 12px;">
-      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#8B93A7;margin-bottom:4px;">BLUE &middot; {blue_team_name}</div>
-      <div style="font-size:22px;font-weight:700;color:#60a0f0;line-height:1;">{blue_ft5_conf*100:.1f}%</div>
-      <div style="margin-top:5px;font-size:10px;color:#8B93A7;">odds {ft5_blue_odds} &middot; impl {ft5_blue_impl*100:.1f}% &middot; edge {'+' if ft5_blue_edge>=0 else ''}{ft5_blue_edge*100:.1f}%</div>
+  <div style="{_card}border-color:{ft5_card_border};padding:14px 16px;margin-bottom:6px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:12px;">
+      <div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:0.08em;text-transform:uppercase;color:#8B93A7;margin-bottom:3px;">{blue_team_name}</div>
+        <div style="font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;color:#EDEFF4;line-height:1;">{blue_ft5_conf*100:.1f}%</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8B93A7;margin-top:6px;">odds {ft5_blue_odds} &middot; edge {'+' if ft5_blue_edge>=0 else ''}{ft5_blue_edge*100:.1f}%</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:0.08em;text-transform:uppercase;color:#8B93A7;margin-bottom:3px;">{red_team_name}</div>
+        <div style="font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;color:#EDEFF4;line-height:1;">{red_ft5_conf*100:.1f}%</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8B93A7;margin-top:6px;">odds {ft5_red_odds} &middot; edge {'+' if ft5_red_edge>=0 else ''}{ft5_red_edge*100:.1f}%</div>
+      </div>
     </div>
-    <div style="background:#161D2E;border:1px solid #2A3448;border-radius:5px;padding:10px 12px;">
-      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#8B93A7;margin-bottom:4px;">RED &middot; {red_team_name}</div>
-      <div style="font-size:22px;font-weight:700;color:#f06060;line-height:1;">{red_ft5_conf*100:.1f}%</div>
-      <div style="margin-top:5px;font-size:10px;color:#8B93A7;">odds {ft5_red_odds} &middot; impl {ft5_red_impl*100:.1f}% &middot; edge {'+' if ft5_red_edge>=0 else ''}{ft5_red_edge*100:.1f}%</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.08em;text-transform:uppercase;color:#8B93A7;">Confidence</span>
+      <span style="background:{ft5_bg};color:{ft5_fg};border:1px solid {ft5_br};font-family:'JetBrains Mono',monospace;font-size:9px;padding:2px 8px;border-radius:4px;font-weight:600;">{ft5_conf_txt}</span>
+      <span style="color:#8B93A7;font-size:10px;">&mdash; {ft5_conf_desc}</span>
     </div>
-  </div>
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-    <span style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#8B93A7;">FT5 CONFIDENCE</span>
-    <span style="background:{ft5_bg};color:{ft5_fg};border:1px solid {ft5_br};font-size:9px;padding:2px 8px;border-radius:3px;font-weight:700;">{ft5_conf_txt}</span>
-    <span style="color:#8B93A7;font-size:10px;">&mdash; {ft5_conf_desc}</span>
-  </div>
-  {ft5_caution_html}
-  <div style="background:{ft5_pick_bg};border:1px solid {ft5_pick_border};border-radius:5px;
-              padding:9px 14px;display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
-    <div>
-      <div style="font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:{'#2a6090' if ft5_pick_show else '#8B93A7'};">RECOMMENDED BET &mdash; FIRST TO FIVE</div>
-      <div style="font-size:14px;font-weight:700;color:{ft5_pick_color};margin-top:2px;">{ft5_rec_str}</div>
+    {ft5_caution_html}
+    <div style="border-top:1px solid #2A3448;padding-top:10px;margin-top:2px;display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:{'#C9A227' if ft5_pick_show else '#8B93A7'};">Recommended bet</div>
+        <div style="font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#EDEFF4;margin-top:3px;">{ft5_rec_str}</div>
+      </div>
+      <span style="background:{'#241C08' if ft5_pick_show else '#161D2E'};color:{'#C9A227' if ft5_pick_show else '#8B93A7'};border:1px solid {'#8A701F' if ft5_pick_show else '#2A3448'};font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 14px;border-radius:5px;font-weight:700;">{'PICK' if ft5_pick_show else 'SKIP'}</span>
     </div>
-    <span style="background:{ft5_bg};color:{ft5_fg};border:1px solid {ft5_br};font-size:11px;padding:4px 12px;border-radius:3px;font-weight:700;">{'PICK' if ft5_pick_show else 'SKIP'}</span>
   </div>
   {draft_ft5_cap}
   {ft10_html}
 
-  <div style="border-top:1px solid #2A3448;margin:14px 0;"></div>
+  <div style="border-top:1px solid #2A3448;margin:18px 0;"></div>
 
-  <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#8B93A7;margin-bottom:8px;">GAME STYLE</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
-    <div style="background:#161D2E;border:1px solid #2A3448;border-radius:5px;padding:10px 12px;">
-      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#2a5a90;margin-bottom:6px;">BLUE &middot; {blue_team_name}</div>
+  <div style="{_lbl}">Game style</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+    <div style="{_card}padding:10px 12px;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#5B8FD9;margin-bottom:6px;">{blue_team_name}</div>
       <div style="display:flex;justify-content:space-between;align-items:baseline;">
-        <div><div style="font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">AVG GAME</div><div style="font-size:15px;font-weight:700;color:#EDEFF4;">{fmt_gl(b_avg_gl)}</div></div>
-        <div style="text-align:right;"><div style="font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">AVG KILLS</div><div style="font-size:15px;font-weight:700;color:#EDEFF4;">{b_avg_k_str}</div></div>
+        <div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">Avg game</div><div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;color:#EDEFF4;">{fmt_gl(b_avg_gl)}</div></div>
+        <div style="text-align:right;"><div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">Avg kills</div><div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;color:#EDEFF4;">{b_avg_k_str}</div></div>
       </div>
     </div>
-    <div style="background:#161D2E;border:1px solid #2A3448;border-radius:5px;padding:10px 12px;">
-      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#903030;margin-bottom:6px;">RED &middot; {red_team_name}</div>
+    <div style="{_card}padding:10px 12px;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#E2694B;margin-bottom:6px;">{red_team_name}</div>
       <div style="display:flex;justify-content:space-between;align-items:baseline;">
-        <div><div style="font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">AVG GAME</div><div style="font-size:15px;font-weight:700;color:#EDEFF4;">{fmt_gl(r_avg_gl)}</div></div>
-        <div style="text-align:right;"><div style="font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">AVG KILLS</div><div style="font-size:15px;font-weight:700;color:#EDEFF4;">{r_avg_k_str}</div></div>
+        <div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">Avg game</div><div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;color:#EDEFF4;">{fmt_gl(r_avg_gl)}</div></div>
+        <div style="text-align:right;"><div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">Avg kills</div><div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;color:#EDEFF4;">{r_avg_k_str}</div></div>
       </div>
     </div>
   </div>
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
-    <div style="background:#161D2E;border-radius:4px;padding:7px 10px;">
-      <div style="font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">HIST AVG KILLS</div>
-      <div style="font-size:12px;font-weight:600;color:#C9A227;">{'~' + str(round(total_kills_est)) if total_kills_est else 'N/A'}</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
+    <div style="{_card}padding:8px 10px;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">Hist avg kills</div>
+      <div style="font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#C9A227;">{'~' + str(round(total_kills_est)) if total_kills_est else 'N/A'}</div>
     </div>
-    <div style="background:#161D2E;border-radius:4px;padding:7px 10px;">
-      <div style="font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">H2H WIN</div>
-      <div style="font-size:12px;font-weight:600;color:#EDEFF4;">{blue_team_name[:4]} {b_win_h2h}&ndash;{r_win_h2h} {red_team_name[:4]}</div>
+    <div style="{_card}padding:8px 10px;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">H2H win</div>
+      <div style="font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#EDEFF4;">{blue_team_name[:4]} {b_win_h2h}&ndash;{r_win_h2h} {red_team_name[:4]}</div>
     </div>
-    <div style="background:#161D2E;border-radius:4px;padding:7px 10px;">
-      <div style="font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">H2H FT5</div>
-      <div style="font-size:12px;font-weight:600;color:#EDEFF4;">{blue_team_name[:4]} {b_ft5_h2h}&ndash;{r_ft5_h2h} {red_team_name[:4]}</div>
+    <div style="{_card}padding:8px 10px;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">H2H FT5</div>
+      <div style="font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#EDEFF4;">{blue_team_name[:4]} {b_ft5_h2h}&ndash;{r_ft5_h2h} {red_team_name[:4]}</div>
     </div>
-    <div style="background:#161D2E;border-radius:4px;padding:7px 10px;">
-      <div style="font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">DRAFT-ONLY</div>
-      <div style="font-size:12px;font-weight:600;color:#60a0f0;">{draft_only_str}</div>
+    <div style="{_card}padding:8px 10px;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">Draft-only</div>
+      <div style="font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#C9A227;">{draft_only_str}</div>
     </div>
   </div>
-  {"<div style='background:#0F1A0F;border-left:2px solid #4FD1AE;padding:6px 10px;border-radius:0 5px 5px 0;font-size:11px;font-family:JetBrains Mono,monospace;color:#C8D2F0;margin-top:10px;'><span style='color:#4FD1AE;'>&#9679;</span> " + league_tip + "</div>" if league_tip else ""}
+  {"<div style='background:#0F1A0F;border-left:2px solid #4FD1AE;padding:8px 12px;border-radius:0 5px 5px 0;font-size:11px;font-family:JetBrains Mono,monospace;color:#C8D2F0;margin-top:14px;'><span style='color:#4FD1AE;'>&#9679;</span> " + league_tip + "</div>" if league_tip else ""}
 
 </div>
 """, unsafe_allow_html=True)
