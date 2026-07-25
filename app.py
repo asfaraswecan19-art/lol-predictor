@@ -1566,6 +1566,14 @@ if predict_btn:
         _lbl  = "font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#8B93A7;margin-bottom:8px;"
         win_card_border = '#C9A227' if win_pick_show else '#2A3448'
         ft5_card_border = '#C9A227' if ft5_pick_show else '#2A3448'
+        win_pick_label_color = '#C9A227' if win_pick_show else '#8B93A7'
+        win_pill_bg          = '#241C08' if win_pick_show else '#161D2E'
+        win_pill_border      = '#8A701F' if win_pick_show else '#2A3448'
+        win_pill_label       = 'PICK' if win_pick_show else 'SKIP'
+        ft5_pick_label_color = '#C9A227' if ft5_pick_show else '#8B93A7'
+        ft5_pill_bg          = '#241C08' if ft5_pick_show else '#161D2E'
+        ft5_pill_border      = '#8A701F' if ft5_pick_show else '#2A3448'
+        ft5_pill_label       = 'PICK' if ft5_pick_show else 'SKIP'
 
         st.markdown(f"""
 <div style="background:#0E1420;border:1px solid #2A3448;border-radius:12px;padding:20px;
@@ -1630,10 +1638,10 @@ if predict_btn:
     {win_caution_html}
     <div style="border-top:1px solid #2A3448;padding-top:10px;margin-top:2px;display:flex;align-items:center;justify-content:space-between;">
       <div>
-        <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:{'#C9A227' if win_pick_show else '#8B93A7'};">Recommended bet</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:{win_pick_label_color};">Recommended bet</div>
         <div style="font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#EDEFF4;margin-top:3px;">{win_rec_str}</div>
       </div>
-      <span style="background:{'#241C08' if win_pick_show else '#161D2E'};color:{'#C9A227' if win_pick_show else '#8B93A7'};border:1px solid {'#8A701F' if win_pick_show else '#2A3448'};font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 14px;border-radius:5px;font-weight:700;">{'PICK' if win_pick_show else 'SKIP'}</span>
+      <span style="background:{win_pill_bg};color:{win_pick_label_color};border:1px solid {win_pill_border};font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 14px;border-radius:5px;font-weight:700;">{win_pill_label}</span>
     </div>
   </div>
   {draft_win_cap}
@@ -1663,10 +1671,10 @@ if predict_btn:
     {ft5_caution_html}
     <div style="border-top:1px solid #2A3448;padding-top:10px;margin-top:2px;display:flex;align-items:center;justify-content:space-between;">
       <div>
-        <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:{'#C9A227' if ft5_pick_show else '#8B93A7'};">Recommended bet</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:{ft5_pick_label_color};">Recommended bet</div>
         <div style="font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#EDEFF4;margin-top:3px;">{ft5_rec_str}</div>
       </div>
-      <span style="background:{'#241C08' if ft5_pick_show else '#161D2E'};color:{'#C9A227' if ft5_pick_show else '#8B93A7'};border:1px solid {'#8A701F' if ft5_pick_show else '#2A3448'};font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 14px;border-radius:5px;font-weight:700;">{'PICK' if ft5_pick_show else 'SKIP'}</span>
+      <span style="background:{ft5_pill_bg};color:{ft5_pick_label_color};border:1px solid {ft5_pill_border};font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 14px;border-radius:5px;font-weight:700;">{ft5_pill_label}</span>
     </div>
   </div>
   {draft_ft5_cap}
