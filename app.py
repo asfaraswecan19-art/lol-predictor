@@ -18,35 +18,34 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
   header[data-testid="stHeader"] { display: none !important; }
   #MainMenu { display: none !important; }
   footer { display: none !important; }
   .stDeployButton { display: none !important; }
   div[data-testid="stToolbar"] { display: none !important; }
-  .stApp { background: #0E1420; color: #EDEFF4; font-family: 'Inter', sans-serif; }
+  .stApp { background: #0a0c10; color: #d0d8f0; }
   .block-container { padding-top: 0.75rem !important; }
-  hr { border-color: #2A3448 !important; }
+  hr { border-color: #1e2535 !important; }
   .stTextInput > div > div > input,
   .stTextArea > div > div > textarea,
   .stNumberInput > div > div > input {
-    background: #161D2E !important;
-    border: 1px solid #2A3448 !important;
-    color: #EDEFF4 !important;
-    -webkit-text-fill-color: #EDEFF4 !important;
+    background: #0f1218 !important;
+    border: 1px solid #2a3050 !important;
+    color: #e8eeff !important;
+    -webkit-text-fill-color: #e8eeff !important;
     border-radius: 6px !important;
     outline: none !important;
     box-shadow: none !important;
-    font-family: 'JetBrains Mono','Fira Code','Consolas',monospace !important;
+    font-family: 'SF Mono','Fira Code','Consolas',monospace !important;
     font-size: 13px !important;
   }
   .stTextArea > div > div > textarea::placeholder {
-    color: #8B93A7 !important;
-    -webkit-text-fill-color: #8B93A7 !important;
+    color: #3a4a6a !important;
+    -webkit-text-fill-color: #3a4a6a !important;
   }
   .stTextInput > div > div > input::placeholder {
-    color: #8B93A7 !important;
-    -webkit-text-fill-color: #8B93A7 !important;
+    color: #3a4a6a !important;
+    -webkit-text-fill-color: #3a4a6a !important;
   }
   .stTextInput > div > div > input:focus,
   .stTextArea > div > div > textarea:focus,
@@ -62,71 +61,60 @@ st.markdown("""
   .stTextArea, .stTextArea > div, .stTextArea > div > div,
   .stTextArea [data-baseweb="textarea"],
   .stTextArea [data-baseweb="base-input"],
-  textarea { background: #161D2E !important; }
-  .stNumberInput > div > div > div { background: #161D2E !important; }
+  textarea { background: #0f1218 !important; }
+  .stNumberInput > div > div > div { background: #0f1218 !important; }
   button[data-testid="stNumberInputStepDown"],
   button[data-testid="stNumberInputStepUp"] {
-    background: #161D2E !important; border-color: #2A3448 !important; color: #4a6a30 !important;
+    background: #0f1218 !important; border-color: #2a3050 !important; color: #4a6a30 !important;
   }
   button[data-testid="stNumberInputStepDown"]:hover,
   button[data-testid="stNumberInputStepUp"]:hover {
-    background: #0F1A0F !important; color: #C9A227 !important;
+    background: #1a2a10 !important; color: #80d040 !important;
   }
-  div[data-baseweb="base-input"] { background: #161D2E !important; }
-  div[data-baseweb="input"] { background: #161D2E !important; border-color: #2A3448 !important; }
-  label { color: #8B93A7 !important; font-size: 0.78rem !important;
-          font-family: 'JetBrains Mono','Fira Code','Consolas',monospace !important;
+  div[data-baseweb="base-input"] { background: #0f1218 !important; }
+  div[data-baseweb="input"] { background: #0f1218 !important; border-color: #2a3050 !important; }
+  label { color: #3a4a6a !important; font-size: 0.78rem !important;
+          font-family: 'SF Mono','Fira Code','Consolas',monospace !important;
           text-transform: uppercase !important; letter-spacing: 0.08em !important; }
   div[data-testid="stButton"] > button[kind="primary"] {
-    background: #C9A227 !important; border: 1px solid #C9A227 !important;
-    color: #1a1406 !important; font-family: 'Inter',sans-serif !important;
-    font-weight: 600 !important; border-radius: 7px !important; letter-spacing: normal !important;
+    background: #0d1f05 !important; border: 1px solid #2a5a10 !important;
+    color: #80d040 !important; font-family: 'SF Mono','Fira Code',monospace !important;
+    font-weight: 700 !important; border-radius: 5px !important; letter-spacing: 0.06em !important;
   }
-  div[data-testid="stButton"] > button[kind="primary"]:hover {
-    background: #ddb531 !important; border-color: #ddb531 !important;
-  }
-  .stCheckbox input[type="checkbox"] { accent-color: #C9A227 !important; }
-  [data-testid="stCheckbox"] svg { fill: #C9A227 !important; }
-  [data-baseweb="checkbox"] [data-checked="true"] { background: #C9A227 !important; border-color: #C9A227 !important; }
-  .stRadio input[type="radio"] { accent-color: #C9A227 !important; }
-  [data-baseweb="radio"] [aria-checked="true"] > div:first-child { border-color: #C9A227 !important; }
-  [data-baseweb="radio"] [aria-checked="true"] > div:first-child > div { background: #C9A227 !important; }
-  ::selection { background: #8A701F; color: #EDEFF4; }
-  a { color: #C9A227 !important; }
   div[data-testid="stButton"] > button[kind="secondary"] {
-    background: #161D2E !important; border: 1px solid #2A3448 !important;
-    color: #8B93A7 !important; font-family: 'JetBrains Mono','Fira Code',monospace !important;
+    background: #0f1218 !important; border: 1px solid #1e2535 !important;
+    color: #4a5a7a !important; font-family: 'SF Mono','Fira Code',monospace !important;
     border-radius: 5px !important;
   }
   div[data-testid="stButton"] > button[kind="secondary"]:hover {
-    border-color: #8B93A7 !important; color: #8B93A7 !important;
+    border-color: #3a4a6a !important; color: #8090b0 !important;
   }
   div[data-testid="stExpander"] {
-    background: #161D2E !important; border: 1px solid #2A3448 !important; border-radius: 6px !important;
+    background: #0f1218 !important; border: 1px solid #1e2535 !important; border-radius: 6px !important;
   }
   div[data-testid="stExpander"] summary {
-    color: #8B93A7 !important; font-family: 'JetBrains Mono','Fira Code',monospace !important;
+    color: #4a5a7a !important; font-family: 'SF Mono','Fira Code',monospace !important;
   }
   div[data-testid="metric-container"] {
-    background: #161D2E; border: 1px solid #2A3448; border-radius: 6px; padding: 0.6rem 0.8rem;
+    background: #0f1218; border: 1px solid #1e2535; border-radius: 6px; padding: 0.6rem 0.8rem;
   }
-  div[data-testid="metric-container"] label { color: #8B93A7 !important; }
+  div[data-testid="metric-container"] label { color: #3a4060 !important; }
   div[data-testid="metric-container"] div[data-testid="stMetricValue"] {
-    color: #C9A227 !important; font-size: 1.4rem !important;
-    font-family: 'JetBrains Mono','Fira Code',monospace !important;
+    color: #c0f060 !important; font-size: 1.4rem !important;
+    font-family: 'SF Mono','Fira Code',monospace !important;
   }
   div[data-testid="metric-container"] div[data-testid="stMetricDelta"] svg { display:none; }
-  .stCheckbox label { color: #8B93A7 !important; text-transform: none !important; letter-spacing: 0 !important; }
-  .stRadio label { color: #8B93A7 !important; font-family: 'JetBrains Mono','Fira Code',monospace !important; font-size: 0.82rem !important; text-transform: none !important; letter-spacing: 0 !important; }
+  .stCheckbox label { color: #4a5a7a !important; text-transform: none !important; letter-spacing: 0 !important; }
+  .stRadio label { color: #8090b0 !important; font-family: 'SF Mono','Fira Code',monospace !important; font-size: 0.82rem !important; text-transform: none !important; letter-spacing: 0 !important; }
   .stRadio > div { gap: 6px !important; }
-  p, .stMarkdown p { color: #8B93A7; font-family: 'JetBrains Mono','Fira Code',monospace; font-size: 0.82rem; }
-  h1,h2,h3 { font-family: 'JetBrains Mono','Fira Code',monospace !important; color: #C9A227 !important; }
-  small, .stCaption { color: #8B93A7 !important; font-family: 'JetBrains Mono','Fira Code',monospace !important; }
+  p, .stMarkdown p { color: #8090b0; font-family: 'SF Mono','Fira Code',monospace; font-size: 0.82rem; }
+  h1,h2,h3 { font-family: 'SF Mono','Fira Code',monospace !important; color: #c0f060 !important; }
+  small, .stCaption { color: #3a4a6a !important; font-family: 'SF Mono','Fira Code',monospace !important; }
   div[data-testid="stTextInput"] > div > div { padding: 4px 8px !important; height: 30px !important; }
   .stTextArea > div > div > textarea { padding: 4px 8px !important; }
   .stNumberInput > div > div > input { padding: 4px 6px !important; height: 30px !important; }
   .stNumberInput button { height: 30px !important; }
-  div[data-testid="stAlert"] { border-radius: 5px !important; font-family: 'JetBrains Mono','Fira Code',monospace !important; font-size: 0.82rem !important; }
+  div[data-testid="stAlert"] { border-radius: 5px !important; font-family: 'SF Mono','Fira Code',monospace !important; font-size: 0.82rem !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -326,10 +314,10 @@ with st.spinner("Loading models..."):
 # Tier 2 tab would display T1's numbers.
 _header_slot = st.empty()
 
-st.markdown('<span style="color:#4FD1AE;font-size:0.75rem;font-family:monospace;">&#9654; MODELS LOADED</span>', unsafe_allow_html=True)
+st.markdown('<span style="color:#3a6a20;font-size:0.75rem;font-family:monospace;">&#9654; MODELS LOADED</span>', unsafe_allow_html=True)
 
 # ── Tier selector ──
-st.markdown('<div style="border-top:1px solid #2A3448;margin:8px 0 6px;"></div>', unsafe_allow_html=True)
+st.markdown('<div style="border-top:1px solid #1e2535;margin:8px 0 6px;"></div>', unsafe_allow_html=True)
 selected_tier = st.radio(
     "LEAGUE TIER",
     ["🏆 Tier 1 (LCK / LPL / LEC / LCS / CBLOL)", "🥈 Tier 2 (LCKC / LFL / EM / PRM)", "🔀 KeSPA (mixed rosters)"],
@@ -345,11 +333,11 @@ elif use_t2:
     st.markdown('<div style="color:#60a0f0;font-size:10px;font-family:monospace;margin-bottom:4px;">&#9658; Using Tier 2 model — trained on LCKC, LFL, EM, PRM</div>', unsafe_allow_html=True)
     p = p_t2
 elif "Tier 2" in selected_tier and p_t2 is None:
-    st.markdown('<div style="color:#C9A227;font-size:10px;font-family:monospace;margin-bottom:4px;">&#9658; Tier 2 model not found — using Tier 1</div>', unsafe_allow_html=True)
+    st.markdown('<div style="color:#c0a040;font-size:10px;font-family:monospace;margin-bottom:4px;">&#9658; Tier 2 model not found — using Tier 1</div>', unsafe_allow_html=True)
     p = p_t1
 else:
     p = p_t1
-st.markdown('<div style="border-top:1px solid #2A3448;margin:6px 0 10px;"></div>', unsafe_allow_html=True)
+st.markdown('<div style="border-top:1px solid #1e2535;margin:6px 0 10px;"></div>', unsafe_allow_html=True)
 
 win_model        = p['win_model']
 win_mlb          = p['win_mlb']
@@ -416,13 +404,13 @@ BACKTEST_STATS_LIVE = any(k in p for k in
     ('backtest_win_acc', 'backtest_win_auc', 'backtest_ft5_acc'))
 
 # ── Render the header now that we know which payload loaded ──
-_stale_note = '' if BACKTEST_STATS_LIVE else ' <span style="color:#8A701F;">(last hand-verified)</span>'
+_stale_note = '' if BACKTEST_STATS_LIVE else ' <span style="color:#5a4010;">(last hand-verified)</span>'
 _tier_label = 'T2' if use_t2 else 'T1'
 _ft5_txt = f" &middot; FT5 {BACKTEST_FT5_ACC:.2f}%"
 _header_slot.markdown(f'''
-<div style="border-bottom:1px solid #2A3448;padding-bottom:10px;margin-bottom:8px;">
-  <span style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:1.3rem;color:#EDEFF4;">Side <span style="color:#C9A227;">Select</span> <span style="color:#5F6B85;font-weight:500;font-size:1rem;">/ Predictor</span> <span style="color:#8B93A7;font-size:0.75rem;font-weight:500;">{_tier_label}</span></span>
-  <div style="color:#8B93A7;font-size:0.72rem;font-family:'JetBrains Mono',monospace;margin-top:4px;">Win ~{BACKTEST_WIN_ACC:.2f}% / AUC {BACKTEST_WIN_AUC:.4f}{_ft5_txt}{_stale_note} &middot; Grid search &middot; Gold trajectory</div>
+<div style="border-bottom:1px solid #1e2535;padding-bottom:10px;margin-bottom:8px;">
+  <span style="color:#c0f060;font-size:1.3rem;font-weight:700;font-family:'SF Mono',monospace;letter-spacing:0.06em;">&#9672; LOL MATCH PREDICTOR v8 &middot; {_tier_label}</span>
+  <span style="color:#3a4a6a;font-size:0.72rem;font-family:'SF Mono',monospace;margin-left:12px;">Win ~{BACKTEST_WIN_ACC:.2f}% / AUC {BACKTEST_WIN_AUC:.4f}{_ft5_txt}{_stale_note} &middot; Grid search &middot; Gold trajectory</span>
 </div>
 ''', unsafe_allow_html=True)
 
@@ -459,7 +447,6 @@ def verify_feature_order(model, df, model_label):
 
 POSITIONS  = ['top', 'jng', 'mid', 'adc', 'sup']
 POS_LABELS = ['Top', 'Jng', 'Mid', 'ADC', 'Sup']
-POS_KEYS   = ['top', 'jg', 'mid', 'adc', 'sup']
 
 CHAMP_LOOKUP = {
     c.lower().replace("'","").replace(" ","").replace("&","").replace(".","").replace("-",""): c
@@ -530,14 +517,11 @@ def parse_champion_input(text):
 
 defaults = {
     'blue_team_input': '', 'red_team_input': '',
+    'blue_comp_input': '', 'red_comp_input': '',
     'blue_p_top': '', 'blue_p_jg': '', 'blue_p_mid': '',
     'blue_p_adc': '', 'blue_p_sup': '',
     'red_p_top':  '', 'red_p_jg':  '', 'red_p_mid':  '',
     'red_p_adc':  '', 'red_p_sup':  '',
-    'blue_champ_top': '', 'blue_champ_jg': '', 'blue_champ_mid': '',
-    'blue_champ_adc': '', 'blue_champ_sup': '',
-    'red_champ_top':  '', 'red_champ_jg':  '', 'red_champ_mid':  '',
-    'red_champ_adc':  '', 'red_champ_sup':  '',
     'game_number': '',
 }
 for k, v in defaults.items():
@@ -792,7 +776,6 @@ def log_to_sheets(row_data, sheet_id):
     except Exception as e:
         return False, f"{type(e).__name__}: {e}"
 
-
 def fetch_tracker_history(conf, conf_level, sheet_id):
     """Returns (history: dict|None, error: str|None)."""
     try:
@@ -885,25 +868,25 @@ Be direct and specific. No bullet points. No statistics."""
 
 btn_col1, btn_col2, btn_col3 = st.columns([1, 1, 4])
 with btn_col1:
-    if st.button("Clear", width="stretch"):
+    if st.button("Clear", use_container_width=True):
         for k, v in defaults.items():
             st.session_state[k] = v
         st.rerun()
 with btn_col2:
-    if st.button("Swap", width="stretch"):
+    if st.button("Swap", use_container_width=True):
         st.session_state['blue_team_input'], st.session_state['red_team_input'] = \
             st.session_state['red_team_input'], st.session_state['blue_team_input']
-        for pos in POS_KEYS:
+        st.session_state['blue_comp_input'], st.session_state['red_comp_input'] = \
+            st.session_state['red_comp_input'], st.session_state['blue_comp_input']
+        for pos in ['top', 'jg', 'mid', 'adc', 'sup']:
             st.session_state[f'blue_p_{pos}'], st.session_state[f'red_p_{pos}'] = \
                 st.session_state[f'red_p_{pos}'], st.session_state[f'blue_p_{pos}']
-            st.session_state[f'blue_champ_{pos}'], st.session_state[f'red_champ_{pos}'] = \
-                st.session_state[f'red_champ_{pos}'], st.session_state[f'blue_champ_{pos}']
         st.rerun()
 
 col1, col2 = st.columns(2)
 
 with col1:
-    st.markdown('<div style="color:#5B8FD9;font-size:11px;font-weight:700;font-family:monospace;letter-spacing:0.08em;margin-bottom:4px;">&#9679; BLUE SIDE</div>', unsafe_allow_html=True)
+    st.markdown('<div style="color:#4a90d9;font-size:11px;font-weight:700;font-family:monospace;letter-spacing:0.08em;margin-bottom:4px;">&#9679; BLUE SIDE</div>', unsafe_allow_html=True)
     blue_kespa_tier = 'T1'
     if use_kespa:
         blue_kespa_tier = st.radio("Blue roster tier", ["T1 (main)", "T2 (academy)"],
@@ -911,6 +894,9 @@ with col1:
         blue_kespa_tier = 'T2' if 'T2' in blue_kespa_tier else 'T1'
     blue_team_raw   = st.text_input("Team name", key='blue_team_input',
                                      placeholder="e.g. T1, Gen.G, Cloud9...", label_visibility="collapsed")
+    # In KeSPA mode, match/autofill against the side's CHOSEN tier payload,
+    # not the global one (which only knows T1 teams). Otherwise academy names
+    # never resolve and lineups don't fill.
     if use_kespa:
         _bpay = p_t2 if blue_kespa_tier == 'T2' else p_t1
         _b_teams = _bpay.get('all_teams', [])
@@ -928,49 +914,41 @@ with col1:
             if not st.session_state['blue_p_adc']: st.session_state['blue_p_adc'] = lineup.get('adc','')
             if not st.session_state['blue_p_sup']: st.session_state['blue_p_sup'] = lineup.get('sup','')
     if blue_team_raw and blue_team_match and blue_team_exact:
-        st.markdown(f'<div style="color:#4FD1AE;font-size:10px;font-family:monospace;margin:-2px 0 6px;">&#10003; {blue_team_match}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="color:#3a6a20;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#10003; {blue_team_match}</div>', unsafe_allow_html=True)
     elif blue_team_raw and blue_team_match:
-        st.markdown(f'<div style="color:#8A701F;font-size:10px;font-family:monospace;margin:-2px 0 6px;">&#8776; {blue_team_match} (fuzzy match — verify)</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="color:#8a6020;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#8776; {blue_team_match} (fuzzy match — verify)</div>', unsafe_allow_html=True)
     elif blue_team_raw:
-        st.markdown('<div style="color:#8B93A7;font-size:10px;font-family:monospace;margin:-2px 0 6px;">&#9900; unknown — using averages</div>', unsafe_allow_html=True)
-    else:
-        st.markdown('<div style="margin-bottom:6px;"></div>', unsafe_allow_html=True)
-
-    blue_parsed, blue_fuzzy_flags = [], []
-    for pos_label, pos_key in zip(POS_LABELS, POS_KEYS):
-        rc0, rc1, rc2 = st.columns([1, 3, 3])
-        with rc0:
-            st.markdown(f'<div style="color:#8B93A7;font-size:9px;font-family:monospace;text-transform:uppercase;letter-spacing:0.05em;padding-top:9px;">{pos_label}</div>', unsafe_allow_html=True)
-        with rc1:
-            st.text_input(f"blue {pos_label} player", key=f'blue_p_{pos_key}',
-                           placeholder="Player", label_visibility="collapsed")
-        with rc2:
-            champ_raw = st.text_input(f"blue {pos_label} champion", key=f'blue_champ_{pos_key}',
-                                       placeholder="Champion", label_visibility="collapsed")
-        match, exact = fuzzy_match_champion(champ_raw) if champ_raw else (None, False)
-        blue_parsed.append(match or '')
-        blue_fuzzy_flags.append((not exact) if match else False)
-
-    blue_p_top = st.session_state['blue_p_top']; blue_p_jg  = st.session_state['blue_p_jg']
-    blue_p_mid = st.session_state['blue_p_mid']; blue_p_adc = st.session_state['blue_p_adc']
-    blue_p_sup = st.session_state['blue_p_sup']
-
-    if any(blue_parsed):
-        _filled = sum(1 for c in blue_parsed if c)
-        _any_fuzzy = any(blue_fuzzy_flags)
-        _color = '#8A701F' if _any_fuzzy else ('#4FD1AE' if _filled == 5 else '#8B93A7')
-        _check = '&#8776;' if _any_fuzzy else ('&#10003;' if _filled == 5 else '&#9888;')
-        _parts = []
-        for i in range(5):
-            if not blue_parsed[i]:
-                continue
-            _marker = '≈' if blue_fuzzy_flags[i] else ''
-            _parts.append(f'{POS_LABELS[i]}: {_marker}{blue_parsed[i]}')
-        _suffix = f' ({_filled}/5 filled)' if _filled < 5 else (' (≈ = fuzzy match, verify)' if _any_fuzzy else '')
-        st.markdown(f'<div style="color:{_color};font-size:10px;font-family:monospace;margin:4px 0 2px;">{_check} {" &middot; ".join(_parts)}{_suffix}</div>', unsafe_allow_html=True)
+        st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#9900; unknown — using averages</div>', unsafe_allow_html=True)
+    blue_comp_raw = st.text_area("Champions", key='blue_comp_input',
+                                  placeholder="e.g. Gnar Nocturne Ahri Caitlyn Bard",
+                                  height=58, label_visibility="collapsed")
+    blue_parsed, blue_fuzzy_flags = parse_champion_input(blue_comp_raw)
+    if blue_comp_raw:
+        if len(blue_parsed) == 5:
+            parts_html = []
+            for i in range(5):
+                is_fuzzy = blue_fuzzy_flags[i] if i < len(blue_fuzzy_flags) else False
+                marker = '≈' if is_fuzzy else ''
+                parts_html.append(f'{POS_LABELS[i]}: {marker}{blue_parsed[i]}')
+            checkmark = '&#8776;' if any(blue_fuzzy_flags) else '&#10003;'
+            color = '#8a6020' if any(blue_fuzzy_flags) else '#3a6a20'
+            suffix = ' (≈ = fuzzy match, verify)' if any(blue_fuzzy_flags) else ''
+            st.markdown(f'<div style="color:{color};font-size:10px;font-family:monospace;margin:-2px 0 2px;">{checkmark} {" &middot; ".join(parts_html)}{suffix}</div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div style="color:#8a6020;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#9888; {len(blue_parsed)}/5 parsed</div>', unsafe_allow_html=True)
+    st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin:4px 0 2px;">PLAYERS (optional)</div>', unsafe_allow_html=True)
+    pb1, pb2, pb3 = st.columns(3)
+    with pb1:
+        blue_p_top = st.text_input("Top", key='blue_p_top', placeholder="Top")
+        blue_p_adc = st.text_input("ADC", key='blue_p_adc', placeholder="ADC")
+    with pb2:
+        blue_p_jg  = st.text_input("Jng", key='blue_p_jg',  placeholder="Jng")
+        blue_p_sup = st.text_input("Sup", key='blue_p_sup', placeholder="Sup")
+    with pb3:
+        blue_p_mid = st.text_input("Mid", key='blue_p_mid', placeholder="Mid")
 
 with col2:
-    st.markdown('<div style="color:#E2694B;font-size:11px;font-weight:700;font-family:monospace;letter-spacing:0.08em;margin-bottom:4px;">&#9679; RED SIDE</div>', unsafe_allow_html=True)
+    st.markdown('<div style="color:#e05454;font-size:11px;font-weight:700;font-family:monospace;letter-spacing:0.08em;margin-bottom:4px;">&#9679; RED SIDE</div>', unsafe_allow_html=True)
     red_kespa_tier = 'T1'
     if use_kespa:
         red_kespa_tier = st.radio("Red roster tier", ["T1 (main)", "T2 (academy)"],
@@ -995,65 +973,58 @@ with col2:
             if not st.session_state['red_p_adc']: st.session_state['red_p_adc'] = lineup.get('adc','')
             if not st.session_state['red_p_sup']: st.session_state['red_p_sup'] = lineup.get('sup','')
     if red_team_raw and red_team_match and red_team_exact:
-        st.markdown(f'<div style="color:#4FD1AE;font-size:10px;font-family:monospace;margin:-2px 0 6px;">&#10003; {red_team_match}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="color:#3a6a20;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#10003; {red_team_match}</div>', unsafe_allow_html=True)
     elif red_team_raw and red_team_match:
-        st.markdown(f'<div style="color:#8A701F;font-size:10px;font-family:monospace;margin:-2px 0 6px;">&#8776; {red_team_match} (fuzzy match — verify)</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="color:#8a6020;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#8776; {red_team_match} (fuzzy match — verify)</div>', unsafe_allow_html=True)
     elif red_team_raw:
-        st.markdown('<div style="color:#8B93A7;font-size:10px;font-family:monospace;margin:-2px 0 6px;">&#9900; unknown — using averages</div>', unsafe_allow_html=True)
-    else:
-        st.markdown('<div style="margin-bottom:6px;"></div>', unsafe_allow_html=True)
+        st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#9900; unknown — using averages</div>', unsafe_allow_html=True)
+    red_comp_raw = st.text_area("Champions", key='red_comp_input',
+                                 placeholder="e.g. Ambessa Pantheon Aurora Jhin Neeko",
+                                 height=58, label_visibility="collapsed")
+    red_parsed, red_fuzzy_flags = parse_champion_input(red_comp_raw)
+    if red_comp_raw:
+        if len(red_parsed) == 5:
+            parts_html = []
+            for i in range(5):
+                is_fuzzy = red_fuzzy_flags[i] if i < len(red_fuzzy_flags) else False
+                marker = '≈' if is_fuzzy else ''
+                parts_html.append(f'{POS_LABELS[i]}: {marker}{red_parsed[i]}')
+            checkmark = '&#8776;' if any(red_fuzzy_flags) else '&#10003;'
+            color = '#8a6020' if any(red_fuzzy_flags) else '#3a6a20'
+            suffix = ' (≈ = fuzzy match, verify)' if any(red_fuzzy_flags) else ''
+            st.markdown(f'<div style="color:{color};font-size:10px;font-family:monospace;margin:-2px 0 2px;">{checkmark} {" &middot; ".join(parts_html)}{suffix}</div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div style="color:#8a6020;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#9888; {len(red_parsed)}/5 parsed</div>', unsafe_allow_html=True)
+    st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin:4px 0 2px;">PLAYERS (optional)</div>', unsafe_allow_html=True)
+    pr1, pr2, pr3 = st.columns(3)
+    with pr1:
+        red_p_top = st.text_input("Top", key='red_p_top', placeholder="Top")
+        red_p_adc = st.text_input("ADC", key='red_p_adc', placeholder="ADC")
+    with pr2:
+        red_p_jg  = st.text_input("Jng", key='red_p_jg',  placeholder="Jng")
+        red_p_sup = st.text_input("Sup", key='red_p_sup', placeholder="Sup")
+    with pr3:
+        red_p_mid = st.text_input("Mid", key='red_p_mid', placeholder="Mid")
 
-    red_parsed, red_fuzzy_flags = [], []
-    for pos_label, pos_key in zip(POS_LABELS, POS_KEYS):
-        rc0, rc1, rc2 = st.columns([1, 3, 3])
-        with rc0:
-            st.markdown(f'<div style="color:#8B93A7;font-size:9px;font-family:monospace;text-transform:uppercase;letter-spacing:0.05em;padding-top:9px;">{pos_label}</div>', unsafe_allow_html=True)
-        with rc1:
-            st.text_input(f"red {pos_label} player", key=f'red_p_{pos_key}',
-                           placeholder="Player", label_visibility="collapsed")
-        with rc2:
-            champ_raw = st.text_input(f"red {pos_label} champion", key=f'red_champ_{pos_key}',
-                                       placeholder="Champion", label_visibility="collapsed")
-        match, exact = fuzzy_match_champion(champ_raw) if champ_raw else (None, False)
-        red_parsed.append(match or '')
-        red_fuzzy_flags.append((not exact) if match else False)
-
-    red_p_top = st.session_state['red_p_top']; red_p_jg  = st.session_state['red_p_jg']
-    red_p_mid = st.session_state['red_p_mid']; red_p_adc = st.session_state['red_p_adc']
-    red_p_sup = st.session_state['red_p_sup']
-
-    if any(red_parsed):
-        _filled = sum(1 for c in red_parsed if c)
-        _any_fuzzy = any(red_fuzzy_flags)
-        _color = '#8A701F' if _any_fuzzy else ('#4FD1AE' if _filled == 5 else '#8B93A7')
-        _check = '&#8776;' if _any_fuzzy else ('&#10003;' if _filled == 5 else '&#9888;')
-        _parts = []
-        for i in range(5):
-            if not red_parsed[i]:
-                continue
-            _marker = '≈' if red_fuzzy_flags[i] else ''
-            _parts.append(f'{POS_LABELS[i]}: {_marker}{red_parsed[i]}')
-        _suffix = f' ({_filled}/5 filled)' if _filled < 5 else (' (≈ = fuzzy match, verify)' if _any_fuzzy else '')
-        st.markdown(f'<div style="color:{_color};font-size:10px;font-family:monospace;margin:4px 0 2px;">{_check} {" &middot; ".join(_parts)}{_suffix}</div>', unsafe_allow_html=True)
 gc1, gc2, gc3, gc4, gc5 = st.columns([1, 1, 1, 1, 1])
 with gc1:
     game_number = st.text_input("Game #", key='game_number', placeholder="1, 2, 3...")
 with gc2:
-    st.markdown('<div style="color:#8B93A7;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin-bottom:2px;">WIN ODDS</div>', unsafe_allow_html=True)
+    st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin-bottom:2px;">WIN ODDS</div>', unsafe_allow_html=True)
     wo1, wo2 = st.columns(2)
     with wo1:
         win_blue_odds = st.number_input("Blue", min_value=1.01, max_value=10.0, value=1.85, step=0.05, key="wbo")
     with wo2:
         win_red_odds  = st.number_input("Red",  min_value=1.01, max_value=10.0, value=1.95, step=0.05, key="wro")
 with gc3:
-    st.markdown('<div style="color:#8B93A7;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin-bottom:2px;">FT5 ODDS</div>', unsafe_allow_html=True)
+    st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin-bottom:2px;">FT5 ODDS</div>', unsafe_allow_html=True)
     fo1, fo2 = st.columns(2)
     with fo1:
         ft5_blue_odds = st.number_input("Blue", min_value=1.01, max_value=10.0, value=1.85, step=0.05, key="fbo")
     with fo2:
         ft5_red_odds  = st.number_input("Red",  min_value=1.01, max_value=10.0, value=1.95, step=0.05, key="fro")
 with gc4:
-    st.markdown('<div style="color:#8B93A7;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin-bottom:2px;">FT10 ODDS</div>', unsafe_allow_html=True)
+    st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin-bottom:2px;">FT10 ODDS</div>', unsafe_allow_html=True)
     if ft10_available and not use_kespa:
         f10a, f10b = st.columns(2)
         with f10a:
@@ -1064,12 +1035,12 @@ with gc4:
         ft10_blue_odds = 1.85; ft10_red_odds = 1.95
         st.markdown('<div style="color:#2a3a4a;font-size:9px;font-family:monospace;margin-top:4px;">n/a</div>', unsafe_allow_html=True)
 with gc5:
-    st.markdown('<div style="color:#8B93A7;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin-bottom:2px;">LOG TO</div>', unsafe_allow_html=True)
+    st.markdown('<div style="color:#3a4a6a;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin-bottom:2px;">LOG TO</div>', unsafe_allow_html=True)
     send_discord   = st.checkbox("Discord",   value=True)
     send_ft5_sheet = st.checkbox("FT5 Sheet", value=True)
     send_win_sheet = st.checkbox("Win Sheet", value=True)
 
-predict_btn = st.button("Run prediction", type="primary", width="stretch")
+predict_btn = st.button("&#9672;  PREDICT", type="primary", use_container_width=True)
 
 # =================================================================
 # PREDICTION
@@ -1100,7 +1071,7 @@ if predict_btn:
         if len(blue) < 5: missing.append(f"blue picks ({len(blue)}/5)")
         if len(red)  < 5: missing.append(f"red picks ({len(red)}/5)")
         if missing:
-            st.markdown(f'<div style="color:#8A701F;font-size:10px;font-family:monospace;margin-bottom:4px;">&#9888; Missing: {", ".join(missing)} — using dataset averages</div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="color:#8a6020;font-size:10px;font-family:monospace;margin-bottom:4px;">&#9888; Missing: {", ".join(missing)} — using dataset averages</div>', unsafe_allow_html=True)
 
         if len(blue) == 5:
             b_win_enc = pd.DataFrame(win_mlb.transform([blue]),
@@ -1395,13 +1366,13 @@ if predict_btn:
 
         # ── helpers ──
         def conf_display(level):
-            if 'HIGH'   in level: return ('HIGH',   '#0F1A0F', '#4FD1AE', '#2A4A1A')
-            if 'MEDIUM' in level: return ('MEDIUM', '#241C08', '#C9A227', '#8A701F')
-            return                        ('LOW',    '#2A1410', '#E2694B', '#5A2A20')
+            if 'HIGH'   in level: return ('HIGH',   '#0a1f05', '#80d040', '#2a5010')
+            if 'MEDIUM' in level: return ('MEDIUM', '#1f1a05', '#d0a040', '#5a4010')
+            return                        ('LOW',    '#1a0505', '#f06060', '#5a1010')
 
         def agg_tag(agg_score):
-            if agg_score >= 0.58: return ('high', '#C9A227')
-            if agg_score >= 0.48: return ('avg',  '#8B93A7')
+            if agg_score >= 0.58: return ('high', '#c0f060')
+            if agg_score >= 0.48: return ('avg',  '#8090b0')
             return                       ('low',  '#60a0f0')
 
         def fmt_gl(seconds):
@@ -1434,12 +1405,12 @@ if predict_btn:
         else:
             ft5_rec_str = f"{ft5_winner} FT5 &middot; SKIP (edge {ft5_pick_edge*100:.1f}%)"
 
-        win_pick_color  = '#C9A227' if win_pick_show else '#8B93A7'
-        win_pick_bg     = '#0F1A0F' if win_pick_show else '#161D2E'
-        win_pick_border = '#2A4A1A' if win_pick_show else '#2A3448'
-        ft5_pick_color  = '#60a0f0' if ft5_pick_show else '#8B93A7'
-        ft5_pick_bg     = '#05101f' if ft5_pick_show else '#161D2E'
-        ft5_pick_border = '#103a6a' if ft5_pick_show else '#2A3448'
+        win_pick_color  = '#c0f060' if win_pick_show else '#4a5a7a'
+        win_pick_bg     = '#0d1f05' if win_pick_show else '#0f1218'
+        win_pick_border = '#2a5a10' if win_pick_show else '#1e2535'
+        ft5_pick_color  = '#60a0f0' if ft5_pick_show else '#4a5a7a'
+        ft5_pick_bg     = '#05101f' if ft5_pick_show else '#0f1218'
+        ft5_pick_border = '#103a6a' if ft5_pick_show else '#1e2535'
 
         # ── FT10 display card (only when the model produced an FT10 prediction) ──
         ft10_html = ""
@@ -1454,36 +1425,36 @@ if predict_btn:
                 ft10_rec_str = f"{ft10_winner} FT10 &middot; {ft10_pick_units}u {ft10_pick_label} &middot; @{ft10_pick_odds}"
             else:
                 ft10_rec_str = f"{ft10_winner} FT10 &middot; SKIP (edge {ft10_pick_edge*100:.1f}%)"
-            _f10_pc = '#60c0a0' if ft10_pick_show else '#8B93A7'
-            _f10_bg = '#05201a' if ft10_pick_show else '#161D2E'
-            _f10_bd = '#106a4a' if ft10_pick_show else '#2A3448'
+            _f10_pc = '#60c0a0' if ft10_pick_show else '#4a5a7a'
+            _f10_bg = '#05201a' if ft10_pick_show else '#0f1218'
+            _f10_bd = '#106a4a' if ft10_pick_show else '#1e2535'
             _f10_badge_bg = '#0a3a2a' if ft10_pick_show else '#1a1e28'
-            _f10_badge_fg = '#40c090' if ft10_pick_show else '#8B93A7'
+            _f10_badge_fg = '#40c090' if ft10_pick_show else '#4a5a7a'
             ft10_html = f"""
-  <div style="border-top:1px solid #2A3448;margin:14px 0;"></div>
-  <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#8B93A7;margin-bottom:6px;">FIRST TO TEN KILLS</div>
+  <div style="border-top:1px solid #1e2535;margin:14px 0;"></div>
+  <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:6px;">FIRST TO TEN KILLS</div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px;">
-    <div style="background:#161D2E;border:1px solid #2A3448;border-radius:5px;padding:10px 12px;">
-      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#8B93A7;margin-bottom:4px;">BLUE &middot; {blue_team_name}</div>
+    <div style="background:#0f1218;border:1px solid #1e2535;border-radius:5px;padding:10px 12px;">
+      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:4px;">BLUE &middot; {blue_team_name}</div>
       <div style="font-size:22px;font-weight:700;color:#40c090;line-height:1;">{blue_ft10_conf*100:.1f}%</div>
-      <div style="margin-top:5px;font-size:10px;color:#8B93A7;">odds {ft10_blue_odds} &middot; impl {ft10_blue_impl*100:.1f}% &middot; edge {'+' if ft10_blue_edge>=0 else ''}{ft10_blue_edge*100:.1f}%</div>
+      <div style="margin-top:5px;font-size:10px;color:#3a4a6a;">odds {ft10_blue_odds} &middot; impl {ft10_blue_impl*100:.1f}% &middot; edge {'+' if ft10_blue_edge>=0 else ''}{ft10_blue_edge*100:.1f}%</div>
     </div>
-    <div style="background:#161D2E;border:1px solid #2A3448;border-radius:5px;padding:10px 12px;">
-      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#8B93A7;margin-bottom:4px;">RED &middot; {red_team_name}</div>
+    <div style="background:#0f1218;border:1px solid #1e2535;border-radius:5px;padding:10px 12px;">
+      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:4px;">RED &middot; {red_team_name}</div>
       <div style="font-size:22px;font-weight:700;color:#40c090;line-height:1;">{red_ft10_conf*100:.1f}%</div>
-      <div style="margin-top:5px;font-size:10px;color:#8B93A7;">odds {ft10_red_odds} &middot; impl {ft10_red_impl*100:.1f}% &middot; edge {'+' if ft10_red_edge>=0 else ''}{ft10_red_edge*100:.1f}%</div>
+      <div style="margin-top:5px;font-size:10px;color:#3a4a6a;">odds {ft10_red_odds} &middot; impl {ft10_red_impl*100:.1f}% &middot; edge {'+' if ft10_red_edge>=0 else ''}{ft10_red_edge*100:.1f}%</div>
     </div>
   </div>
   <div style="background:{_f10_bg};border:1px solid {_f10_bd};border-radius:5px;padding:9px 14px;display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
     <div>
-      <div style="font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:{'#2a9070' if ft10_pick_show else '#8B93A7'};">RECOMMENDED BET &mdash; FIRST TO TEN</div>
+      <div style="font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:{'#2a9070' if ft10_pick_show else '#3a4a6a'};">RECOMMENDED BET &mdash; FIRST TO TEN</div>
       <div style="font-size:14px;font-weight:700;color:{_f10_pc};margin-top:2px;">{ft10_rec_str}</div>
     </div>
     <span style="background:{_f10_badge_bg};color:{_f10_badge_fg};border:1px solid {_f10_bd};font-size:11px;padding:4px 12px;border-radius:3px;font-weight:700;">{'PICK' if ft10_pick_show else 'SKIP'}</span>
   </div>"""
 
         def draft_rows_html(picks, players):
-            if not picks: return '<div style="color:#8B93A7;font-size:10px;">No picks entered</div>'
+            if not picks: return '<div style="color:#3a4060;font-size:10px;">No picks entered</div>'
             pos_labels = ['TOP','JNG','MID','ADC','SUP']
             rows = ''
             for i, champ in enumerate(picks):
@@ -1493,8 +1464,8 @@ if predict_btn:
                 player = players[i].strip() if i < len(players) and players[i].strip() else ''
                 pl_html = f' <span style="color:#5a6a8a;font-size:9px;">({player})</span>' if player else ''
                 rows += (f'<div style="display:grid;grid-template-columns:28px 1fr auto;align-items:center;gap:5px;padding:2px 0;">'
-                         f'<span style="font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.06em;">{pos}</span>'
-                         f'<span style="font-size:11px;color:#8B93A7;">{champ}{pl_html}</span>'
+                         f'<span style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.06em;">{pos}</span>'
+                         f'<span style="font-size:11px;color:#8090b0;">{champ}{pl_html}</span>'
                          f'<span style="font-size:9px;color:{tagcol};">{tag}</span>'
                          f'</div>')
             return rows
@@ -1527,34 +1498,33 @@ if predict_btn:
                 league_tip = _t2_tip
 
         red_signal_html = (
-            '<div style="background:#0F1A0F;border-left:2px solid #4FD1AE;padding:6px 10px;'
-            'border-radius:0 5px 5px 0;font-size:11px;font-family:\'JetBrains Mono\',monospace;'
-            'color:#C8D2F0;margin-bottom:8px;"><span style="color:#4FD1AE;font-weight:600;">'
-            f'&#9679; STRONG RED SIGNAL</span> &mdash; blue conf {blue_ft5_conf*100:.1f}% (below 48%). '
+            '<div style="background:#1a0505;border-left:2px solid #6a1010;padding:5px 8px;'
+            'border-radius:0 4px 4px 0;font-size:10px;color:#f06060;margin-bottom:8px;">'
+            f'STRONG RED SIGNAL &mdash; blue conf {blue_ft5_conf*100:.1f}% (below 48%). '
             'Backtest: 61% red accuracy.</div>'
         ) if ft5_strong_red else ''
 
         _staleness_note = '' if BACKTEST_STATS_LIVE else ' (from last hand-verified backtest, not re-checked on retrain)'
         win_caution_html = (
-            '<div style="background:#241C08;border-left:2px solid #8A701F;padding:5px 8px;'
-            'border-radius:0 4px 4px 0;font-size:10px;color:#C9A227;margin-top:6px;">'
+            '<div style="background:#1f1a05;border-left:2px solid #5a4010;padding:5px 8px;'
+            'border-radius:0 4px 4px 0;font-size:10px;color:#c0a040;margin-top:6px;">'
             f'60-65% range — historically lower real-world accuracy than the raw confidence suggests, be cautious{_staleness_note}</div>'
         ) if win_caution else ''
 
         ft5_caution_html = (
-            '<div style="background:#241C08;border-left:2px solid #8A701F;padding:5px 8px;'
-            'border-radius:0 4px 4px 0;font-size:10px;color:#C9A227;margin-top:6px;">'
+            '<div style="background:#1f1a05;border-left:2px solid #5a4010;padding:5px 8px;'
+            'border-radius:0 4px 4px 0;font-size:10px;color:#c0a040;margin-top:6px;">'
             f'60-65% range — treat with extra caution{_staleness_note}</div>'
         ) if ft5_caution else ''
 
         draft_win_cap = ''
         if bdw is not None:
             dw_name = blue_team_name if bdw > rdw else red_team_name
-            draft_win_cap = f'<div style="color:#8B93A7;font-size:10px;margin-top:4px;">Draft-only win: {blue_team_name} {bdw*100:.1f}% vs {red_team_name} {rdw*100:.1f}% &mdash; {dw_name} better draft</div>'
+            draft_win_cap = f'<div style="color:#3a4060;font-size:10px;margin-top:4px;">Draft-only win: {blue_team_name} {bdw*100:.1f}% vs {red_team_name} {rdw*100:.1f}% &mdash; {dw_name} better draft</div>'
         draft_ft5_cap = ''
         if bdf is not None:
             df5_name = blue_team_name if bdf > rdf else red_team_name
-            draft_ft5_cap = f'<div style="color:#8B93A7;font-size:10px;margin-top:4px;">Draft-only FT5: {blue_team_name} {bdf*100:.1f}% vs {red_team_name} {rdf*100:.1f}% &mdash; {df5_name} more aggressive</div>'
+            draft_ft5_cap = f'<div style="color:#3a4060;font-size:10px;margin-top:4px;">Draft-only FT5: {blue_team_name} {bdf*100:.1f}% vs {red_team_name} {rdf*100:.1f}% &mdash; {df5_name} more aggressive</div>'
 
         game_lbl_html   = f' &mdash; {game_label}' if game_label else ''
         b_avg_k_str     = f"{b_avg_k:.1f}" if b_avg_k else 'N/A'
@@ -1562,162 +1532,142 @@ if predict_btn:
         draft_only_str  = f"{(blue_team_name if bdw and bdw > rdw else red_team_name)[:5]} {max(bdw,rdw)*100:.1f}%" if bdw is not None else 'N/A'
         tier_badge      = 'T2' if use_t2 else 'T1'
 
-        _card = "background:#161D2E;border:1px solid #2A3448;border-radius:8px;"
-        _lbl  = "font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#8B93A7;margin-bottom:8px;"
-        win_card_border = '#C9A227' if win_pick_show else '#2A3448'
-        ft5_card_border = '#C9A227' if ft5_pick_show else '#2A3448'
-        win_pick_label_color = '#C9A227' if win_pick_show else '#8B93A7'
-        win_pill_bg          = '#241C08' if win_pick_show else '#161D2E'
-        win_pill_border      = '#8A701F' if win_pick_show else '#2A3448'
-        win_pill_label       = 'PICK' if win_pick_show else 'SKIP'
-        ft5_pick_label_color = '#C9A227' if ft5_pick_show else '#8B93A7'
-        ft5_pill_bg          = '#241C08' if ft5_pick_show else '#161D2E'
-        ft5_pill_border      = '#8A701F' if ft5_pick_show else '#2A3448'
-        ft5_pill_label       = 'PICK' if ft5_pick_show else 'SKIP'
-
         st.markdown(f"""
-<div style="background:#0E1420;border:1px solid #2A3448;border-radius:12px;padding:20px;
-     font-family:'Inter',sans-serif;margin-top:16px;">
+<div style="background:#0a0c10;border:1px solid #1e2330;border-radius:10px;padding:16px;
+     font-family:'SF Mono','Fira Code','Consolas',monospace;font-size:12px;margin-top:16px;">
 
   <div style="display:flex;align-items:center;justify-content:space-between;
-              border-bottom:1px solid #2A3448;padding-bottom:12px;margin-bottom:16px;">
-    <span style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;color:#EDEFF4;">Prediction</span>
-    <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.05em;background:#0F1A0F;
-                 color:#4FD1AE;border:1px solid #2A4A1A;padding:3px 9px;border-radius:5px;">
-      {(league_detected or 'N/A').upper()}{game_lbl_html} &middot; {tier_badge}
+              border-bottom:1px solid #1e2535;padding-bottom:10px;margin-bottom:14px;">
+    <span style="color:#c0f060;font-size:13px;font-weight:700;letter-spacing:0.06em;">&#9672; LOL MATCH PREDICTOR v8 &middot; {tier_badge}</span>
+    <span style="background:#1a2a10;color:#6db33f;font-size:10px;padding:2px 8px;border-radius:3px;border:1px solid #2a4a1a;">
+      {(league_detected or 'N/A').upper()}{game_lbl_html}
     </span>
   </div>
 
-  <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:18px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
     <div>
-      <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:18px;color:#EDEFF4;">{blue_team_name}</div>
-      <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8B93A7;margin-top:3px;">
-        <span style="color:#5B8FD9;">&#9679;</span> BLUE &middot; {b_wr*100:.1f}% WR &middot; form {b_form*100:.0f}%
-      </div>
+      <div style="font-size:15px;font-weight:700;color:#e0e8ff;">{blue_team_name}</div>
+      <div style="color:#3a4a6a;margin-top:2px;font-size:11px;">BLUE &middot; {b_wr*100:.1f}% WR &middot; form {b_form*100:.0f}%</div>
     </div>
-    <div style="font-family:'JetBrains Mono',monospace;color:#2A3448;font-size:11px;font-weight:600;">VS</div>
+    <div style="color:#2a3050;font-size:11px;font-weight:700;padding:0 10px;">VS</div>
     <div style="text-align:right;">
-      <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:18px;color:#EDEFF4;">{red_team_name}</div>
-      <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8B93A7;margin-top:3px;">
-        RED &middot; {r_wr*100:.1f}% WR &middot; form {r_form*100:.0f}% <span style="color:#E2694B;">&#9679;</span>
-      </div>
+      <div style="font-size:15px;font-weight:700;color:#e0e8ff;">{red_team_name}</div>
+      <div style="color:#3a4a6a;margin-top:2px;font-size:11px;">RED &middot; {r_wr*100:.1f}% WR &middot; form {r_form*100:.0f}%</div>
     </div>
   </div>
 
-  <div style="{_lbl}">Draft</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px;">
-    <div style="{_card}border-left:2px solid #5B8FD9;padding:10px 12px;">
-      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#5B8FD9;margin-bottom:6px;">Blue</div>
+  <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:6px;">DRAFT</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
+    <div style="background:#0f1218;border:1px solid #1e2535;border-left:2px solid #1e4a80;border-radius:5px;padding:8px 10px;">
+      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#2a5a90;margin-bottom:6px;">BLUE &middot; {blue_team_name}</div>
       {blue_draft_html}
     </div>
-    <div style="{_card}border-left:2px solid #E2694B;padding:10px 12px;">
-      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#E2694B;margin-bottom:6px;">Red</div>
+    <div style="background:#0f1218;border:1px solid #1e2535;border-left:2px solid #801e1e;border-radius:5px;padding:8px 10px;">
+      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#903030;margin-bottom:6px;">RED &middot; {red_team_name}</div>
       {red_draft_html}
     </div>
   </div>
 
-  <div style="{_lbl}">Match winner</div>
-  <div style="{_card}border-color:{win_card_border};padding:14px 16px;margin-bottom:6px;">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:12px;">
-      <div>
-        <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:0.08em;text-transform:uppercase;color:#8B93A7;margin-bottom:3px;">{blue_team_name}</div>
-        <div style="font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;color:#EDEFF4;line-height:1;">{blue_win_conf*100:.1f}%</div>
-        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8B93A7;margin-top:6px;">odds {win_blue_odds} &middot; edge {'+' if win_blue_edge>=0 else ''}{win_blue_edge*100:.1f}%</div>
-      </div>
-      <div style="text-align:right;">
-        <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:0.08em;text-transform:uppercase;color:#8B93A7;margin-bottom:3px;">{red_team_name}</div>
-        <div style="font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;color:#EDEFF4;line-height:1;">{red_win_conf*100:.1f}%</div>
-        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8B93A7;margin-top:6px;">odds {win_red_odds} &middot; edge {'+' if win_red_edge>=0 else ''}{win_red_edge*100:.1f}%</div>
-      </div>
+  <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:6px;">MATCH WINNER</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px;">
+    <div style="background:#0f1218;border:1px solid #1e2535;border-radius:5px;padding:10px 12px;">
+      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:4px;">BLUE &middot; {blue_team_name}</div>
+      <div style="font-size:22px;font-weight:700;color:#c0f060;line-height:1;">{blue_win_conf*100:.1f}%</div>
+      <div style="margin-top:5px;font-size:10px;color:#3a4a6a;">odds {win_blue_odds} &middot; impl {win_blue_impl*100:.1f}% &middot; edge {'+' if win_blue_edge>=0 else ''}{win_blue_edge*100:.1f}%</div>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-      <span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.08em;text-transform:uppercase;color:#8B93A7;">Confidence</span>
-      <span style="background:{win_bg};color:{win_fg};border:1px solid {win_br};font-family:'JetBrains Mono',monospace;font-size:9px;padding:2px 8px;border-radius:4px;font-weight:600;">{win_conf_txt}</span>
-      <span style="color:#8B93A7;font-size:10px;">&mdash; {win_conf_desc}</span>
+    <div style="background:#0f1218;border:1px solid #1e2535;border-radius:5px;padding:10px 12px;">
+      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:4px;">RED &middot; {red_team_name}</div>
+      <div style="font-size:22px;font-weight:700;color:#f06060;line-height:1;">{red_win_conf*100:.1f}%</div>
+      <div style="margin-top:5px;font-size:10px;color:#3a4a6a;">odds {win_red_odds} &middot; impl {win_red_impl*100:.1f}% &middot; edge {'+' if win_red_edge>=0 else ''}{win_red_edge*100:.1f}%</div>
     </div>
-    {win_caution_html}
-    <div style="border-top:1px solid #2A3448;padding-top:10px;margin-top:2px;display:flex;align-items:center;justify-content:space-between;">
-      <div>
-        <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:{win_pick_label_color};">Recommended bet</div>
-        <div style="font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#EDEFF4;margin-top:3px;">{win_rec_str}</div>
-      </div>
-      <span style="background:{win_pill_bg};color:{win_pick_label_color};border:1px solid {win_pill_border};font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 14px;border-radius:5px;font-weight:700;">{win_pill_label}</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+    <span style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;">MODEL CONFIDENCE</span>
+    <span style="background:{win_bg};color:{win_fg};border:1px solid {win_br};font-size:9px;padding:2px 8px;border-radius:3px;font-weight:700;">{win_conf_txt}</span>
+    <span style="color:#3a4a6a;font-size:10px;">&mdash; {win_conf_desc}</span>
+  </div>
+  {win_caution_html}
+  <div style="background:{win_pick_bg};border:1px solid {win_pick_border};border-radius:5px;
+              padding:9px 14px;display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
+    <div>
+      <div style="font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:{'#4a8020' if win_pick_show else '#3a4a6a'};">RECOMMENDED BET &mdash; MATCH WINNER</div>
+      <div style="font-size:14px;font-weight:700;color:{win_pick_color};margin-top:2px;">{win_rec_str}</div>
     </div>
+    <span style="background:{win_bg};color:{win_fg};border:1px solid {win_br};font-size:11px;padding:4px 12px;border-radius:3px;font-weight:700;">{'PICK' if win_pick_show else 'SKIP'}</span>
   </div>
   {draft_win_cap}
 
-  <div style="border-top:1px solid #2A3448;margin:18px 0;"></div>
+  <div style="border-top:1px solid #1e2535;margin:14px 0;"></div>
 
-  <div style="{_lbl}">First to five kills</div>
+  <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:6px;">FIRST TO FIVE KILLS</div>
   {red_signal_html}
-  <div style="{_card}border-color:{ft5_card_border};padding:14px 16px;margin-bottom:6px;">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:12px;">
-      <div>
-        <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:0.08em;text-transform:uppercase;color:#8B93A7;margin-bottom:3px;">{blue_team_name}</div>
-        <div style="font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;color:#EDEFF4;line-height:1;">{blue_ft5_conf*100:.1f}%</div>
-        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8B93A7;margin-top:6px;">odds {ft5_blue_odds} &middot; edge {'+' if ft5_blue_edge>=0 else ''}{ft5_blue_edge*100:.1f}%</div>
-      </div>
-      <div style="text-align:right;">
-        <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:0.08em;text-transform:uppercase;color:#8B93A7;margin-bottom:3px;">{red_team_name}</div>
-        <div style="font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;color:#EDEFF4;line-height:1;">{red_ft5_conf*100:.1f}%</div>
-        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8B93A7;margin-top:6px;">odds {ft5_red_odds} &middot; edge {'+' if ft5_red_edge>=0 else ''}{ft5_red_edge*100:.1f}%</div>
-      </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px;">
+    <div style="background:#0f1218;border:1px solid #1e2535;border-radius:5px;padding:10px 12px;">
+      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:4px;">BLUE &middot; {blue_team_name}</div>
+      <div style="font-size:22px;font-weight:700;color:#60a0f0;line-height:1;">{blue_ft5_conf*100:.1f}%</div>
+      <div style="margin-top:5px;font-size:10px;color:#3a4a6a;">odds {ft5_blue_odds} &middot; impl {ft5_blue_impl*100:.1f}% &middot; edge {'+' if ft5_blue_edge>=0 else ''}{ft5_blue_edge*100:.1f}%</div>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-      <span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.08em;text-transform:uppercase;color:#8B93A7;">Confidence</span>
-      <span style="background:{ft5_bg};color:{ft5_fg};border:1px solid {ft5_br};font-family:'JetBrains Mono',monospace;font-size:9px;padding:2px 8px;border-radius:4px;font-weight:600;">{ft5_conf_txt}</span>
-      <span style="color:#8B93A7;font-size:10px;">&mdash; {ft5_conf_desc}</span>
+    <div style="background:#0f1218;border:1px solid #1e2535;border-radius:5px;padding:10px 12px;">
+      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:4px;">RED &middot; {red_team_name}</div>
+      <div style="font-size:22px;font-weight:700;color:#f06060;line-height:1;">{red_ft5_conf*100:.1f}%</div>
+      <div style="margin-top:5px;font-size:10px;color:#3a4a6a;">odds {ft5_red_odds} &middot; impl {ft5_red_impl*100:.1f}% &middot; edge {'+' if ft5_red_edge>=0 else ''}{ft5_red_edge*100:.1f}%</div>
     </div>
-    {ft5_caution_html}
-    <div style="border-top:1px solid #2A3448;padding-top:10px;margin-top:2px;display:flex;align-items:center;justify-content:space-between;">
-      <div>
-        <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:{ft5_pick_label_color};">Recommended bet</div>
-        <div style="font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#EDEFF4;margin-top:3px;">{ft5_rec_str}</div>
-      </div>
-      <span style="background:{ft5_pill_bg};color:{ft5_pick_label_color};border:1px solid {ft5_pill_border};font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 14px;border-radius:5px;font-weight:700;">{ft5_pill_label}</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+    <span style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;">FT5 CONFIDENCE</span>
+    <span style="background:{ft5_bg};color:{ft5_fg};border:1px solid {ft5_br};font-size:9px;padding:2px 8px;border-radius:3px;font-weight:700;">{ft5_conf_txt}</span>
+    <span style="color:#3a4a6a;font-size:10px;">&mdash; {ft5_conf_desc}</span>
+  </div>
+  {ft5_caution_html}
+  <div style="background:{ft5_pick_bg};border:1px solid {ft5_pick_border};border-radius:5px;
+              padding:9px 14px;display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
+    <div>
+      <div style="font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:{'#2a6090' if ft5_pick_show else '#3a4a6a'};">RECOMMENDED BET &mdash; FIRST TO FIVE</div>
+      <div style="font-size:14px;font-weight:700;color:{ft5_pick_color};margin-top:2px;">{ft5_rec_str}</div>
     </div>
+    <span style="background:{ft5_bg};color:{ft5_fg};border:1px solid {ft5_br};font-size:11px;padding:4px 12px;border-radius:3px;font-weight:700;">{'PICK' if ft5_pick_show else 'SKIP'}</span>
   </div>
   {draft_ft5_cap}
   {ft10_html}
 
-  <div style="border-top:1px solid #2A3448;margin:18px 0;"></div>
+  <div style="border-top:1px solid #1e2535;margin:14px 0;"></div>
 
-  <div style="{_lbl}">Game style</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-    <div style="{_card}padding:10px 12px;">
-      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#5B8FD9;margin-bottom:6px;">{blue_team_name}</div>
+  <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#3a4a6a;margin-bottom:8px;">GAME STYLE</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+    <div style="background:#0f1218;border:1px solid #1e2535;border-radius:5px;padding:10px 12px;">
+      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#2a5a90;margin-bottom:6px;">BLUE &middot; {blue_team_name}</div>
       <div style="display:flex;justify-content:space-between;align-items:baseline;">
-        <div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">Avg game</div><div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;color:#EDEFF4;">{fmt_gl(b_avg_gl)}</div></div>
-        <div style="text-align:right;"><div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">Avg kills</div><div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;color:#EDEFF4;">{b_avg_k_str}</div></div>
+        <div><div style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">AVG GAME</div><div style="font-size:15px;font-weight:700;color:#d0d8f0;">{fmt_gl(b_avg_gl)}</div></div>
+        <div style="text-align:right;"><div style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">AVG KILLS</div><div style="font-size:15px;font-weight:700;color:#d0d8f0;">{b_avg_k_str}</div></div>
       </div>
     </div>
-    <div style="{_card}padding:10px 12px;">
-      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#E2694B;margin-bottom:6px;">{red_team_name}</div>
+    <div style="background:#0f1218;border:1px solid #1e2535;border-radius:5px;padding:10px 12px;">
+      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#903030;margin-bottom:6px;">RED &middot; {red_team_name}</div>
       <div style="display:flex;justify-content:space-between;align-items:baseline;">
-        <div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">Avg game</div><div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;color:#EDEFF4;">{fmt_gl(r_avg_gl)}</div></div>
-        <div style="text-align:right;"><div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">Avg kills</div><div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;color:#EDEFF4;">{r_avg_k_str}</div></div>
+        <div><div style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">AVG GAME</div><div style="font-size:15px;font-weight:700;color:#d0d8f0;">{fmt_gl(r_avg_gl)}</div></div>
+        <div style="text-align:right;"><div style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">AVG KILLS</div><div style="font-size:15px;font-weight:700;color:#d0d8f0;">{r_avg_k_str}</div></div>
       </div>
     </div>
   </div>
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
-    <div style="{_card}padding:8px 10px;">
-      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">Hist avg kills</div>
-      <div style="font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#C9A227;">{'~' + str(round(total_kills_est)) if total_kills_est else 'N/A'}</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
+    <div style="background:#0f1218;border-radius:4px;padding:7px 10px;">
+      <div style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">HIST AVG KILLS</div>
+      <div style="font-size:12px;font-weight:600;color:#f0c060;">{'~' + str(round(total_kills_est)) if total_kills_est else 'N/A'}</div>
     </div>
-    <div style="{_card}padding:8px 10px;">
-      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">H2H win</div>
-      <div style="font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#EDEFF4;">{blue_team_name[:4]} {b_win_h2h}&ndash;{r_win_h2h} {red_team_name[:4]}</div>
+    <div style="background:#0f1218;border-radius:4px;padding:7px 10px;">
+      <div style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">H2H WIN</div>
+      <div style="font-size:12px;font-weight:600;color:#d0d8f0;">{blue_team_name[:4]} {b_win_h2h}&ndash;{r_win_h2h} {red_team_name[:4]}</div>
     </div>
-    <div style="{_card}padding:8px 10px;">
-      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">H2H FT5</div>
-      <div style="font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#EDEFF4;">{blue_team_name[:4]} {b_ft5_h2h}&ndash;{r_ft5_h2h} {red_team_name[:4]}</div>
+    <div style="background:#0f1218;border-radius:4px;padding:7px 10px;">
+      <div style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">H2H FT5</div>
+      <div style="font-size:12px;font-weight:600;color:#d0d8f0;">{blue_team_name[:4]} {b_ft5_h2h}&ndash;{r_ft5_h2h} {red_team_name[:4]}</div>
     </div>
-    <div style="{_card}padding:8px 10px;">
-      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#8B93A7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">Draft-only</div>
-      <div style="font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#C9A227;">{draft_only_str}</div>
+    <div style="background:#0f1218;border-radius:4px;padding:7px 10px;">
+      <div style="font-size:9px;color:#3a4060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">DRAFT-ONLY</div>
+      <div style="font-size:12px;font-weight:600;color:#60a0f0;">{draft_only_str}</div>
     </div>
   </div>
-  {"<div style='background:#0F1A0F;border-left:2px solid #4FD1AE;padding:8px 12px;border-radius:0 5px 5px 0;font-size:11px;font-family:JetBrains Mono,monospace;color:#C8D2F0;margin-top:14px;'><span style='color:#4FD1AE;'>&#9679;</span> " + league_tip + "</div>" if league_tip else ""}
+  {"<div style='background:#0a150a;border-left:2px solid #3a6020;padding:5px 8px;border-radius:0 4px 4px 0;font-size:10px;color:#6a8a50;margin-top:10px;'>" + league_tip + "</div>" if league_tip else ""}
 
 </div>
 """, unsafe_allow_html=True)
@@ -1817,7 +1767,7 @@ if predict_btn:
             status_parts.append("🏆 Winner logged" if winner_sheets_ok is True else "⚠️ Winner sheet failed")
         if status_parts:
             st.markdown(
-                '<div style="color:#8B93A7;font-size:0.75rem;font-family:monospace;text-align:center;margin-top:8px;">'
+                '<div style="color:#3a4a6a;font-size:0.75rem;font-family:monospace;text-align:center;margin-top:8px;">'
                 + " &nbsp;|&nbsp; ".join(status_parts) + '</div>',
                 unsafe_allow_html=True)
         errors = [
@@ -1832,6 +1782,6 @@ if predict_btn:
                     st.code(f"{label}: {err}", language=None)
 
         st.markdown(
-            f'<div style="color:#2A3448;font-size:0.72rem;font-family:monospace;text-align:center;margin-top:12px;">'
+            f'<div style="color:#1e2535;font-size:0.72rem;font-family:monospace;text-align:center;margin-top:12px;">'
             f'V8 {_tier_label} | Win {BACKTEST_WIN_ACC:.2f}% / AUC {BACKTEST_WIN_AUC:.4f} | FT5 {BACKTEST_FT5_ACC:.2f}% | Best ROI at 2.30+ odds</div>',
             unsafe_allow_html=True)
