@@ -70,7 +70,7 @@ st.markdown("""
   }
   button[data-testid="stNumberInputStepDown"]:hover,
   button[data-testid="stNumberInputStepUp"]:hover {
-    background: #0F1A0F !important; color: #80d040 !important;
+    background: #0F1A0F !important; color: #C9A227 !important;
   }
   div[data-baseweb="base-input"] { background: #161D2E !important; }
   div[data-baseweb="input"] { background: #161D2E !important; border-color: #2A3448 !important; }
@@ -78,10 +78,21 @@ st.markdown("""
           font-family: 'JetBrains Mono','Fira Code','Consolas',monospace !important;
           text-transform: uppercase !important; letter-spacing: 0.08em !important; }
   div[data-testid="stButton"] > button[kind="primary"] {
-    background: #0F1A0F !important; border: 1px solid #2A4A1A !important;
-    color: #80d040 !important; font-family: 'JetBrains Mono','Fira Code',monospace !important;
-    font-weight: 700 !important; border-radius: 5px !important; letter-spacing: 0.06em !important;
+    background: #C9A227 !important; border: 1px solid #C9A227 !important;
+    color: #1a1406 !important; font-family: 'Inter',sans-serif !important;
+    font-weight: 600 !important; border-radius: 7px !important; letter-spacing: normal !important;
   }
+  div[data-testid="stButton"] > button[kind="primary"]:hover {
+    background: #ddb531 !important; border-color: #ddb531 !important;
+  }
+  .stCheckbox input[type="checkbox"] { accent-color: #C9A227 !important; }
+  [data-testid="stCheckbox"] svg { fill: #C9A227 !important; }
+  [data-baseweb="checkbox"] [data-checked="true"] { background: #C9A227 !important; border-color: #C9A227 !important; }
+  .stRadio input[type="radio"] { accent-color: #C9A227 !important; }
+  [data-baseweb="radio"] [aria-checked="true"] > div:first-child { border-color: #C9A227 !important; }
+  [data-baseweb="radio"] [aria-checked="true"] > div:first-child > div { background: #C9A227 !important; }
+  ::selection { background: #8A701F; color: #EDEFF4; }
+  a { color: #C9A227 !important; }
   div[data-testid="stButton"] > button[kind="secondary"] {
     background: #161D2E !important; border: 1px solid #2A3448 !important;
     color: #8B93A7 !important; font-family: 'JetBrains Mono','Fira Code',monospace !important;
@@ -870,12 +881,12 @@ Be direct and specific. No bullet points. No statistics."""
 
 btn_col1, btn_col2, btn_col3 = st.columns([1, 1, 4])
 with btn_col1:
-    if st.button("Clear", use_container_width=True):
+    if st.button("Clear", width="stretch"):
         for k, v in defaults.items():
             st.session_state[k] = v
         st.rerun()
 with btn_col2:
-    if st.button("Swap", use_container_width=True):
+    if st.button("Swap", width="stretch"):
         st.session_state['blue_team_input'], st.session_state['red_team_input'] = \
             st.session_state['red_team_input'], st.session_state['blue_team_input']
         st.session_state['blue_comp_input'], st.session_state['red_comp_input'] = \
@@ -1042,7 +1053,7 @@ with gc5:
     send_ft5_sheet = st.checkbox("FT5 Sheet", value=True)
     send_win_sheet = st.checkbox("Win Sheet", value=True)
 
-predict_btn = st.button("&#9672;  PREDICT", type="primary", use_container_width=True)
+predict_btn = st.button("Run prediction", type="primary", width="stretch")
 
 # =================================================================
 # PREDICTION
@@ -1368,7 +1379,7 @@ if predict_btn:
 
         # ── helpers ──
         def conf_display(level):
-            if 'HIGH'   in level: return ('HIGH',   '#0a1f05', '#80d040', '#2a5010')
+            if 'HIGH'   in level: return ('HIGH',   '#0F1A0F', '#4FD1AE', '#2A4A1A')
             if 'MEDIUM' in level: return ('MEDIUM', '#241C08', '#C9A227', '#8A701F')
             return                        ('LOW',    '#1a0505', '#f06060', '#5a1010')
 
