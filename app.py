@@ -414,6 +414,94 @@ _header_slot.markdown(f'''
 </div>
 ''', unsafe_allow_html=True)
 
+# ── Betting Tips & Cheat Sheet ──
+# Self-contained block — reads the same live per-league payload data used
+# further down (BACKTEST_LEAGUE_EDGES / BACKTEST_WIN_LEAGUE_EDGES) so it
+# won't drift out of sync with what the predictor itself is using. The
+# league win-rate numbers below it are the last full hand-verified figures
+# (session 2026-07-24) since there's no live T1 win-model-per-league feed
+# in the payload yet — treat those as a rule-of-thumb, not a live dashboard.
+with st.expander("📋 Betting Tips & Cheat Sheet — things to remember before you bet", expanded=False):
+    _tips_ft5 = BACKTEST_LEAGUE_EDGES or {
+        'LCK':   'LCK FT5: Best league — +6.9% edge. Red signal 69% accurate.',
+        'LPL':   'LPL FT5: Model not trained on LPL — rough guide only.',
+        'LEC':   'LEC FT5: Weak edge (+2.8%). Red signal unreliable (48%). Only bet blue 60%+.',
+        'LCS':   'LCS FT5: Negative edge (-1.3%). Blue baseline (55%) only — avoid FT5 bets.',
+        'CBLOL': 'CBLOL FT5: Solid edge (+3.2%). Red signal 63% accurate.',
+        'FST':   'FST FT5: Small sample. Red signal weak (25%). Favour blue.',
+    }
+    _tips_ft5_live = bool(BACKTEST_LEAGUE_EDGES)
+    _tips_win_t2_live = bool(BACKTEST_WIN_LEAGUE_EDGES)
+    _ft5_badge = (
+        "<span style=\"color:#3a6a30;font-size:0.7rem;\">(live from payload)</span>" if _tips_ft5_live
+        else "<span style=\"color:#5a4010;font-size:0.7rem;\">(last hand-verified)</span>"
+    )
+
+    def _tip_rows(d):
+        return "".join(
+            f'<div style="padding:6px 0;border-bottom:1px solid #161c2c;font-size:12.5px;'
+            f'font-family:\'SF Mono\',monospace;color:#c8d2f0;">{tip}</div>'
+            for tip in d.values()
+        )
+
+    if _tips_win_t2_live:
+        _t2_section = (
+            '<div style="color:#c0f060;font-size:0.95rem;font-weight:700;margin-bottom:6px;">'
+            'T2 WIN MODEL &middot; by league '
+            '<span style="color:#3a6a30;font-size:0.7rem;">(live from payload)</span></div>'
+            '<div style="margin-bottom:16px;">' + _tip_rows(BACKTEST_WIN_LEAGUE_EDGES) + '</div>'
+        )
+    else:
+        _t2_section = ""
+
+    st.markdown(f'''
+    <div style="font-family:'SF Mono',monospace;">
+
+      <div style="color:#c0f060;font-size:0.95rem;font-weight:700;margin-bottom:6px;">
+        WIN MODEL &middot; by league <span style="color:#5a4010;font-size:0.7rem;">(last hand-verified, 2026-07-24)</span>
+      </div>
+      <div style="margin-bottom:16px;">
+        <div style="padding:6px 0;border-bottom:1px solid #161c2c;font-size:12.5px;color:#c8d2f0;">✅ <b>LCK</b> — strongest edge, +11.7%. Bet with confidence.</div>
+        <div style="padding:6px 0;border-bottom:1px solid #161c2c;font-size:12.5px;color:#c8d2f0;">✅ <b>First Stand</b> — +11.1%, small sample though.</div>
+        <div style="padding:6px 0;border-bottom:1px solid #161c2c;font-size:12.5px;color:#c8d2f0;">✅ <b>LCS</b> — +10.8%, solid.</div>
+        <div style="padding:6px 0;border-bottom:1px solid #161c2c;font-size:12.5px;color:#c8d2f0;">🟡 <b>LPL</b> — +6.8%, moderate.</div>
+        <div style="padding:6px 0;border-bottom:1px solid #161c2c;font-size:12.5px;color:#c8d2f0;">🟡 <b>EWC</b> — +6.5%, moderate.</div>
+        <div style="padding:6px 0;border-bottom:1px solid #161c2c;font-size:12.5px;color:#c8d2f0;">🟡 <b>MSI</b> — +4.2%, small sample.</div>
+        <div style="padding:6px 0;border-bottom:1px solid #161c2c;font-size:12.5px;color:#c8d2f0;">🟠 <b>LEC</b> — only +2.8% after the leak fix. Weak.</div>
+        <div style="padding:6px 0;border-bottom:1px solid #161c2c;font-size:12.5px;color:#c8d2f0;">❌ <b>CBLOL</b> — +0.6%. Not bettable anymore.</div>
+      </div>
+
+      <div style="color:#c0f060;font-size:0.95rem;font-weight:700;margin-bottom:6px;">
+        FT5 &middot; by league {_ft5_badge}
+      </div>
+      <div style="margin-bottom:16px;">{_tip_rows(_tips_ft5)}</div>
+
+      {_t2_section}
+
+      <div style="color:#c0f060;font-size:0.95rem;font-weight:700;margin-bottom:6px;">
+        THE RED SIGNAL
+      </div>
+      <div style="padding:8px 10px;background:#0f1a0f;border:1px solid #2a4a1a;border-radius:6px;font-size:12.5px;color:#c8d2f0;margin-bottom:16px;">
+        When blue-side confidence drops below <b>48%</b>, red has historically won about <b>60%</b> of those games —
+        a <b style="color:#c0f060;">+19.6% edge</b> backing red instead of blue. Strongest in <b>EWC (68%)</b> and <b>LCK (66%)</b>.
+        This is the single biggest edge in the system — don't second-guess it just because it feels contrarian.
+      </div>
+
+      <div style="color:#c0f060;font-size:0.95rem;font-weight:700;margin-bottom:6px;">
+        OTHER THINGS TO REMEMBER
+      </div>
+      <div style="padding:6px 0;border-bottom:1px solid #161c2c;font-size:12.5px;color:#c8d2f0;">🚫 <b>NACL</b> — no learnable signal (AUC 0.50, coin-flip). Always exclude, not a close call.</div>
+      <div style="padding:6px 0;border-bottom:1px solid #161c2c;font-size:12.5px;color:#c8d2f0;">🆕 <b>New/unrecognized champions</b> — that draft slot is uninformative until ~30 pro games. Treat the prediction as lower-confidence, size down.</div>
+      <div style="padding:6px 0;border-bottom:1px solid #161c2c;font-size:12.5px;color:#c8d2f0;">💀 <b>FT10</b> — tested, rejected (−1.5% edge). Don't chase first-to-10-kills bets even if it feels intuitive.</div>
+      <div style="padding:6px 0;border-bottom:1px solid #161c2c;font-size:12.5px;color:#c8d2f0;">💀 <b>Precise FT5 labels</b> — more "correct" but performed worse than the proxy. Already reverted — don't second-guess it.</div>
+      <div style="padding:6px 0;font-size:12.5px;color:#5a6a8a;">
+        Tested and didn't help (don't bother re-testing): kill_speed feature &middot; lane-separated matchup diffs &middot;
+        meta/time-scoped features &middot; patch-specific champ WR &middot; strength-of-schedule.
+      </div>
+
+    </div>
+    ''', unsafe_allow_html=True)
+
 # ── Feature-order safety net ──
 # win_extra / ft5_extra columns below are hand-typed and MUST match the
 # order train_and_save.py used when fitting the model. If they ever drift
