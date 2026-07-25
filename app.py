@@ -459,6 +459,7 @@ def verify_feature_order(model, df, model_label):
 
 POSITIONS  = ['top', 'jng', 'mid', 'adc', 'sup']
 POS_LABELS = ['Top', 'Jng', 'Mid', 'ADC', 'Sup']
+POS_KEYS   = ['top', 'jg', 'mid', 'adc', 'sup']
 
 CHAMP_LOOKUP = {
     c.lower().replace("'","").replace(" ","").replace("&","").replace(".","").replace("-",""): c
@@ -529,11 +530,14 @@ def parse_champion_input(text):
 
 defaults = {
     'blue_team_input': '', 'red_team_input': '',
-    'blue_comp_input': '', 'red_comp_input': '',
     'blue_p_top': '', 'blue_p_jg': '', 'blue_p_mid': '',
     'blue_p_adc': '', 'blue_p_sup': '',
     'red_p_top':  '', 'red_p_jg':  '', 'red_p_mid':  '',
     'red_p_adc':  '', 'red_p_sup':  '',
+    'blue_champ_top': '', 'blue_champ_jg': '', 'blue_champ_mid': '',
+    'blue_champ_adc': '', 'blue_champ_sup': '',
+    'red_champ_top':  '', 'red_champ_jg':  '', 'red_champ_mid':  '',
+    'red_champ_adc':  '', 'red_champ_sup':  '',
     'game_number': '',
 }
 for k, v in defaults.items():
@@ -889,17 +893,17 @@ with btn_col2:
     if st.button("Swap", width="stretch"):
         st.session_state['blue_team_input'], st.session_state['red_team_input'] = \
             st.session_state['red_team_input'], st.session_state['blue_team_input']
-        st.session_state['blue_comp_input'], st.session_state['red_comp_input'] = \
-            st.session_state['red_comp_input'], st.session_state['blue_comp_input']
-        for pos in ['top', 'jg', 'mid', 'adc', 'sup']:
+        for pos in POS_KEYS:
             st.session_state[f'blue_p_{pos}'], st.session_state[f'red_p_{pos}'] = \
                 st.session_state[f'red_p_{pos}'], st.session_state[f'blue_p_{pos}']
+            st.session_state[f'blue_champ_{pos}'], st.session_state[f'red_champ_{pos}'] = \
+                st.session_state[f'red_champ_{pos}'], st.session_state[f'blue_champ_{pos}']
         st.rerun()
 
 col1, col2 = st.columns(2)
 
 with col1:
-    st.markdown('<div style="color:#4a90d9;font-size:11px;font-weight:700;font-family:monospace;letter-spacing:0.08em;margin-bottom:4px;">&#9679; BLUE SIDE</div>', unsafe_allow_html=True)
+    st.markdown('<div style="color:#5B8FD9;font-size:11px;font-weight:700;font-family:monospace;letter-spacing:0.08em;margin-bottom:4px;">&#9679; BLUE SIDE</div>', unsafe_allow_html=True)
     blue_kespa_tier = 'T1'
     if use_kespa:
         blue_kespa_tier = st.radio("Blue roster tier", ["T1 (main)", "T2 (academy)"],
@@ -907,9 +911,6 @@ with col1:
         blue_kespa_tier = 'T2' if 'T2' in blue_kespa_tier else 'T1'
     blue_team_raw   = st.text_input("Team name", key='blue_team_input',
                                      placeholder="e.g. T1, Gen.G, Cloud9...", label_visibility="collapsed")
-    # In KeSPA mode, match/autofill against the side's CHOSEN tier payload,
-    # not the global one (which only knows T1 teams). Otherwise academy names
-    # never resolve and lineups don't fill.
     if use_kespa:
         _bpay = p_t2 if blue_kespa_tier == 'T2' else p_t1
         _b_teams = _bpay.get('all_teams', [])
@@ -927,41 +928,49 @@ with col1:
             if not st.session_state['blue_p_adc']: st.session_state['blue_p_adc'] = lineup.get('adc','')
             if not st.session_state['blue_p_sup']: st.session_state['blue_p_sup'] = lineup.get('sup','')
     if blue_team_raw and blue_team_match and blue_team_exact:
-        st.markdown(f'<div style="color:#3a6a20;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#10003; {blue_team_match}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="color:#4FD1AE;font-size:10px;font-family:monospace;margin:-2px 0 6px;">&#10003; {blue_team_match}</div>', unsafe_allow_html=True)
     elif blue_team_raw and blue_team_match:
-        st.markdown(f'<div style="color:#8A701F;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#8776; {blue_team_match} (fuzzy match — verify)</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="color:#8A701F;font-size:10px;font-family:monospace;margin:-2px 0 6px;">&#8776; {blue_team_match} (fuzzy match — verify)</div>', unsafe_allow_html=True)
     elif blue_team_raw:
-        st.markdown('<div style="color:#8B93A7;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#9900; unknown — using averages</div>', unsafe_allow_html=True)
-    blue_comp_raw = st.text_area("Champions", key='blue_comp_input',
-                                  placeholder="e.g. Gnar Nocturne Ahri Caitlyn Bard",
-                                  height=58, label_visibility="collapsed")
-    blue_parsed, blue_fuzzy_flags = parse_champion_input(blue_comp_raw)
-    if blue_comp_raw:
-        if len(blue_parsed) == 5:
-            parts_html = []
-            for i in range(5):
-                is_fuzzy = blue_fuzzy_flags[i] if i < len(blue_fuzzy_flags) else False
-                marker = '≈' if is_fuzzy else ''
-                parts_html.append(f'{POS_LABELS[i]}: {marker}{blue_parsed[i]}')
-            checkmark = '&#8776;' if any(blue_fuzzy_flags) else '&#10003;'
-            color = '#8A701F' if any(blue_fuzzy_flags) else '#3a6a20'
-            suffix = ' (≈ = fuzzy match, verify)' if any(blue_fuzzy_flags) else ''
-            st.markdown(f'<div style="color:{color};font-size:10px;font-family:monospace;margin:-2px 0 2px;">{checkmark} {" &middot; ".join(parts_html)}{suffix}</div>', unsafe_allow_html=True)
-        else:
-            st.markdown(f'<div style="color:#8A701F;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#9888; {len(blue_parsed)}/5 parsed</div>', unsafe_allow_html=True)
-    st.markdown('<div style="color:#8B93A7;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin:4px 0 2px;">PLAYERS (optional)</div>', unsafe_allow_html=True)
-    pb1, pb2, pb3 = st.columns(3)
-    with pb1:
-        blue_p_top = st.text_input("Top", key='blue_p_top', placeholder="Top")
-        blue_p_adc = st.text_input("ADC", key='blue_p_adc', placeholder="ADC")
-    with pb2:
-        blue_p_jg  = st.text_input("Jng", key='blue_p_jg',  placeholder="Jng")
-        blue_p_sup = st.text_input("Sup", key='blue_p_sup', placeholder="Sup")
-    with pb3:
-        blue_p_mid = st.text_input("Mid", key='blue_p_mid', placeholder="Mid")
+        st.markdown('<div style="color:#8B93A7;font-size:10px;font-family:monospace;margin:-2px 0 6px;">&#9900; unknown — using averages</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div style="margin-bottom:6px;"></div>', unsafe_allow_html=True)
+
+    blue_parsed, blue_fuzzy_flags = [], []
+    for pos_label, pos_key in zip(POS_LABELS, POS_KEYS):
+        rc0, rc1, rc2 = st.columns([1, 3, 3])
+        with rc0:
+            st.markdown(f'<div style="color:#8B93A7;font-size:9px;font-family:monospace;text-transform:uppercase;letter-spacing:0.05em;padding-top:9px;">{pos_label}</div>', unsafe_allow_html=True)
+        with rc1:
+            st.text_input(f"blue {pos_label} player", key=f'blue_p_{pos_key}',
+                           placeholder="Player", label_visibility="collapsed")
+        with rc2:
+            champ_raw = st.text_input(f"blue {pos_label} champion", key=f'blue_champ_{pos_key}',
+                                       placeholder="Champion", label_visibility="collapsed")
+        match, exact = fuzzy_match_champion(champ_raw) if champ_raw else (None, False)
+        blue_parsed.append(match or '')
+        blue_fuzzy_flags.append((not exact) if match else False)
+
+    blue_p_top = st.session_state['blue_p_top']; blue_p_jg  = st.session_state['blue_p_jg']
+    blue_p_mid = st.session_state['blue_p_mid']; blue_p_adc = st.session_state['blue_p_adc']
+    blue_p_sup = st.session_state['blue_p_sup']
+
+    if any(blue_parsed):
+        _filled = sum(1 for c in blue_parsed if c)
+        _any_fuzzy = any(blue_fuzzy_flags)
+        _color = '#8A701F' if _any_fuzzy else ('#4FD1AE' if _filled == 5 else '#8B93A7')
+        _check = '&#8776;' if _any_fuzzy else ('&#10003;' if _filled == 5 else '&#9888;')
+        _parts = []
+        for i in range(5):
+            if not blue_parsed[i]:
+                continue
+            _marker = '≈' if blue_fuzzy_flags[i] else ''
+            _parts.append(f'{POS_LABELS[i]}: {_marker}{blue_parsed[i]}')
+        _suffix = f' ({_filled}/5 filled)' if _filled < 5 else (' (≈ = fuzzy match, verify)' if _any_fuzzy else '')
+        st.markdown(f'<div style="color:{_color};font-size:10px;font-family:monospace;margin:4px 0 2px;">{_check} {" &middot; ".join(_parts)}{_suffix}</div>', unsafe_allow_html=True)
 
 with col2:
-    st.markdown('<div style="color:#e05454;font-size:11px;font-weight:700;font-family:monospace;letter-spacing:0.08em;margin-bottom:4px;">&#9679; RED SIDE</div>', unsafe_allow_html=True)
+    st.markdown('<div style="color:#E2694B;font-size:11px;font-weight:700;font-family:monospace;letter-spacing:0.08em;margin-bottom:4px;">&#9679; RED SIDE</div>', unsafe_allow_html=True)
     red_kespa_tier = 'T1'
     if use_kespa:
         red_kespa_tier = st.radio("Red roster tier", ["T1 (main)", "T2 (academy)"],
@@ -986,39 +995,46 @@ with col2:
             if not st.session_state['red_p_adc']: st.session_state['red_p_adc'] = lineup.get('adc','')
             if not st.session_state['red_p_sup']: st.session_state['red_p_sup'] = lineup.get('sup','')
     if red_team_raw and red_team_match and red_team_exact:
-        st.markdown(f'<div style="color:#3a6a20;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#10003; {red_team_match}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="color:#4FD1AE;font-size:10px;font-family:monospace;margin:-2px 0 6px;">&#10003; {red_team_match}</div>', unsafe_allow_html=True)
     elif red_team_raw and red_team_match:
-        st.markdown(f'<div style="color:#8A701F;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#8776; {red_team_match} (fuzzy match — verify)</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="color:#8A701F;font-size:10px;font-family:monospace;margin:-2px 0 6px;">&#8776; {red_team_match} (fuzzy match — verify)</div>', unsafe_allow_html=True)
     elif red_team_raw:
-        st.markdown('<div style="color:#8B93A7;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#9900; unknown — using averages</div>', unsafe_allow_html=True)
-    red_comp_raw = st.text_area("Champions", key='red_comp_input',
-                                 placeholder="e.g. Ambessa Pantheon Aurora Jhin Neeko",
-                                 height=58, label_visibility="collapsed")
-    red_parsed, red_fuzzy_flags = parse_champion_input(red_comp_raw)
-    if red_comp_raw:
-        if len(red_parsed) == 5:
-            parts_html = []
-            for i in range(5):
-                is_fuzzy = red_fuzzy_flags[i] if i < len(red_fuzzy_flags) else False
-                marker = '≈' if is_fuzzy else ''
-                parts_html.append(f'{POS_LABELS[i]}: {marker}{red_parsed[i]}')
-            checkmark = '&#8776;' if any(red_fuzzy_flags) else '&#10003;'
-            color = '#8A701F' if any(red_fuzzy_flags) else '#3a6a20'
-            suffix = ' (≈ = fuzzy match, verify)' if any(red_fuzzy_flags) else ''
-            st.markdown(f'<div style="color:{color};font-size:10px;font-family:monospace;margin:-2px 0 2px;">{checkmark} {" &middot; ".join(parts_html)}{suffix}</div>', unsafe_allow_html=True)
-        else:
-            st.markdown(f'<div style="color:#8A701F;font-size:10px;font-family:monospace;margin:-2px 0 2px;">&#9888; {len(red_parsed)}/5 parsed</div>', unsafe_allow_html=True)
-    st.markdown('<div style="color:#8B93A7;font-size:10px;font-family:monospace;letter-spacing:0.08em;margin:4px 0 2px;">PLAYERS (optional)</div>', unsafe_allow_html=True)
-    pr1, pr2, pr3 = st.columns(3)
-    with pr1:
-        red_p_top = st.text_input("Top", key='red_p_top', placeholder="Top")
-        red_p_adc = st.text_input("ADC", key='red_p_adc', placeholder="ADC")
-    with pr2:
-        red_p_jg  = st.text_input("Jng", key='red_p_jg',  placeholder="Jng")
-        red_p_sup = st.text_input("Sup", key='red_p_sup', placeholder="Sup")
-    with pr3:
-        red_p_mid = st.text_input("Mid", key='red_p_mid', placeholder="Mid")
+        st.markdown('<div style="color:#8B93A7;font-size:10px;font-family:monospace;margin:-2px 0 6px;">&#9900; unknown — using averages</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div style="margin-bottom:6px;"></div>', unsafe_allow_html=True)
 
+    red_parsed, red_fuzzy_flags = [], []
+    for pos_label, pos_key in zip(POS_LABELS, POS_KEYS):
+        rc0, rc1, rc2 = st.columns([1, 3, 3])
+        with rc0:
+            st.markdown(f'<div style="color:#8B93A7;font-size:9px;font-family:monospace;text-transform:uppercase;letter-spacing:0.05em;padding-top:9px;">{pos_label}</div>', unsafe_allow_html=True)
+        with rc1:
+            st.text_input(f"red {pos_label} player", key=f'red_p_{pos_key}',
+                           placeholder="Player", label_visibility="collapsed")
+        with rc2:
+            champ_raw = st.text_input(f"red {pos_label} champion", key=f'red_champ_{pos_key}',
+                                       placeholder="Champion", label_visibility="collapsed")
+        match, exact = fuzzy_match_champion(champ_raw) if champ_raw else (None, False)
+        red_parsed.append(match or '')
+        red_fuzzy_flags.append((not exact) if match else False)
+
+    red_p_top = st.session_state['red_p_top']; red_p_jg  = st.session_state['red_p_jg']
+    red_p_mid = st.session_state['red_p_mid']; red_p_adc = st.session_state['red_p_adc']
+    red_p_sup = st.session_state['red_p_sup']
+
+    if any(red_parsed):
+        _filled = sum(1 for c in red_parsed if c)
+        _any_fuzzy = any(red_fuzzy_flags)
+        _color = '#8A701F' if _any_fuzzy else ('#4FD1AE' if _filled == 5 else '#8B93A7')
+        _check = '&#8776;' if _any_fuzzy else ('&#10003;' if _filled == 5 else '&#9888;')
+        _parts = []
+        for i in range(5):
+            if not red_parsed[i]:
+                continue
+            _marker = '≈' if red_fuzzy_flags[i] else ''
+            _parts.append(f'{POS_LABELS[i]}: {_marker}{red_parsed[i]}')
+        _suffix = f' ({_filled}/5 filled)' if _filled < 5 else (' (≈ = fuzzy match, verify)' if _any_fuzzy else '')
+        st.markdown(f'<div style="color:{_color};font-size:10px;font-family:monospace;margin:4px 0 2px;">{_check} {" &middot; ".join(_parts)}{_suffix}</div>', unsafe_allow_html=True)
 gc1, gc2, gc3, gc4, gc5 = st.columns([1, 1, 1, 1, 1])
 with gc1:
     game_number = st.text_input("Game #", key='game_number', placeholder="1, 2, 3...")
@@ -1381,7 +1397,7 @@ if predict_btn:
         def conf_display(level):
             if 'HIGH'   in level: return ('HIGH',   '#0F1A0F', '#4FD1AE', '#2A4A1A')
             if 'MEDIUM' in level: return ('MEDIUM', '#241C08', '#C9A227', '#8A701F')
-            return                        ('LOW',    '#1a0505', '#f06060', '#5a1010')
+            return                        ('LOW',    '#2A1410', '#E2694B', '#5A2A20')
 
         def agg_tag(agg_score):
             if agg_score >= 0.58: return ('high', '#C9A227')
