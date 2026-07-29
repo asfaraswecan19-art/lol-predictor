@@ -285,7 +285,7 @@ win_champ_rate = {
 
 # ── RAW champion win-rate ranking for the app's Tips tab (see Path A for
 #    the full rationale: unshrunk, min-games floor, not used as a feature) ──
-MIN_GAMES_FOR_CHAMP_RANKING = 10  # lowered from 20 -- catch new/patch-driven picks faster
+MIN_GAMES_FOR_CHAMP_RANKING = 20
 champ_wr_ranked = sorted(
     [{'champion': c, 'games': win_champ_games[c],
       'wins': win_champ_wins[c],
