@@ -960,11 +960,17 @@ with btn_col2:
 # Both are raw/unshrunk with a min-games floor (set in train_and_save.py),
 # so every entry shown is backed by a real sample, not a lucky small one.
 # =====================================================================
-CHAMP_WR_RANKED  = p_t1.get('champ_wr_ranked', []) if p_t1 else []
-CHAMP_FT5_RANKED = p_t1.get('champ_ft5_ranked', []) if p_t1 else []
-CHAMP_MIN_GAMES  = p_t1.get('champ_wr_ranked_min_games', 20) if p_t1 else 20
-CHAMP_WR_WINDOW  = p_t1.get('champ_wr_ranked_window') if p_t1 else None
-CHAMP_FT5_WINDOW = p_t1.get('champ_ft5_ranked_window') if p_t1 else None
+# Use whichever payload matches the currently selected tier, so the list
+# actually matches what's being drafted -- T2 champion pools/trends can
+# differ meaningfully from T1. In KeSPA (cross-tier) mode there's no single
+# "current" tier, so it defaults to T1.
+_champ_guide_payload = p_t2 if (use_t2 and p_t2) else p_t1
+_champ_guide_tier_label = 'T2' if (use_t2 and p_t2) else 'T1'
+CHAMP_WR_RANKED  = _champ_guide_payload.get('champ_wr_ranked', []) if _champ_guide_payload else []
+CHAMP_FT5_RANKED = _champ_guide_payload.get('champ_ft5_ranked', []) if _champ_guide_payload else []
+CHAMP_MIN_GAMES  = _champ_guide_payload.get('champ_wr_ranked_min_games', 20) if _champ_guide_payload else 20
+CHAMP_WR_WINDOW  = _champ_guide_payload.get('champ_wr_ranked_window') if _champ_guide_payload else None
+CHAMP_FT5_WINDOW = _champ_guide_payload.get('champ_ft5_ranked_window') if _champ_guide_payload else None
 
 def _fmt_patch(p):
     """16.09 -> '16.09' not '16.9' -- keep the zero-padded minor version visible."""
@@ -998,7 +1004,7 @@ def _champ_rows_html(rows, color):
         f'({d["wins"]}/{d["games"]})</span></span></div>'
         for d in rows) if rows else '<div style="color:#3a4a6a;font-size:11px;">No data yet.</div>'
 
-with st.expander("📊 Champion Form Guide — compare live draft picks", expanded=False):
+with st.expander(f"📊 Champion Form Guide ({_champ_guide_tier_label}) — compare live draft picks", expanded=False):
     if not CHAMP_WR_RANKED and not CHAMP_FT5_RANKED:
         st.caption("No champion ranking yet — run train_and_save.py or train_and_save_B.py "
                    "from 2026-07-24 or later to populate this.")
