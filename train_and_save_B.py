@@ -289,14 +289,32 @@ win_champ_rate = {
 # shouldn't shrink the window). This is DELIBERATELY a separate count from
 # win_champ_wins/win_champ_games above, which feed win_champ_rate -- an
 # actual MODEL FEATURE that must stay all-time/walk-forward-correct. Scoping
-# THAT to 45 days would change what the model predicts; this only changes
-# what the display list shows. A buff/nerf now shows up in ~45 days of data
-# instead of being diluted by 3+ years of history.
+# THAT would change what the model predicts; this only changes what the
+# display list shows.
+#
+# WINDOW = CURRENT PATCH + PREVIOUS PATCH (replaces the earlier 45-day
+# version). Patches run ~2 weeks, so 45 calendar days spanned ~3 patches and
+# still diluted a fresh buff/nerf with older data. Patch-aligned is the
+# correct fix, not just a shorter day-count, since a rolling day window
+# doesn't know where patch boundaries fall. Using current+previous (not
+# current alone) cushions the first day or two after a new patch drops,
+# when the current patch alone might have very few games.
+#
+# OE's patch column is zero-padded (16.01, 16.02, ..., 16.09, 16.10, ...,
+# 16.14) -- VERIFIED against real data that plain numeric max()/sort gives
+# the correct chronological order. (An unpadded scheme like "16.1" vs "16.10"
+# would collide as floats; that is NOT what OE uses, so no special parsing
+# is needed here.)
 MIN_GAMES_FOR_CHAMP_RANKING = 10  # lowered from 20 -- catch new/patch-driven picks faster
-RANKING_WINDOW_DAYS = 45
-_rank_ref_date = win_df['date'].max()
-_rank_window_start = _rank_ref_date - pd.Timedelta(days=RANKING_WINDOW_DAYS)
-_recent_win_df = win_df[win_df['date'] >= _rank_window_start]
+_all_patches = sorted(win_df['patch'].dropna().unique()) if 'patch' in win_df.columns else []
+CURRENT_PATCH = _all_patches[-1] if _all_patches else None
+PREV_PATCH    = _all_patches[-2] if len(_all_patches) >= 2 else CURRENT_PATCH
+_ranking_patches = sorted({p for p in (CURRENT_PATCH, PREV_PATCH) if p is not None})
+if _ranking_patches:
+    _recent_win_df = win_df[win_df['patch'].isin(_ranking_patches)]
+else:
+    print("  WARNING: no 'patch' column in win_df -- champion ranking uses ALL data (unscoped).")
+    _recent_win_df = win_df
 
 _rw_wins = {}; _rw_games = {}
 for _, row in _recent_win_df.iterrows():
@@ -314,9 +332,15 @@ champ_wr_ranked = sorted(
      for c in _rw_games if _rw_games[c] >= MIN_GAMES_FOR_CHAMP_RANKING],
     key=lambda d: d['win_rate'], reverse=True
 )
-print(f"  Champion WR ranking (last {RANKING_WINDOW_DAYS}d, ref {_rank_ref_date.date()}, "
+print(f"  Champion WR ranking (patches {_ranking_patches}, "
       f"{len(_recent_win_df)} games in window): {len(champ_wr_ranked)} champs "
       f"with >={MIN_GAMES_FOR_CHAMP_RANKING} games")
+champ_wr_ranked_window = {
+    'mode': 'patch',
+    'patches': [float(p) for p in _ranking_patches],
+    'current_patch': float(CURRENT_PATCH) if CURRENT_PATCH is not None else None,
+    'games': int(len(_recent_win_df)),
+}
 role_champ_rate = {
     key: shrunk_rate(role_champ_wins[key], role_champ_games[key],
                      win_champ_rate.get(key[1], 0.5), K_ROLE)
@@ -578,41 +602,40 @@ for _, row in ft5_df.iterrows():
 champ_aggression = {c: ft5_champ_wins[c] / ft5_champ_games[c] for c in ft5_champ_games}
 
 # ── RAW FT5 champion ranking, RECENCY-SCOPED to RANKING_WINDOW_DAYS ──
-# kill_timelines.csv (the proxy FT5 source) doesn't always carry a full date
-# column, so this tries three things in order and logs which one it used:
-#   1. ft5_df already has 'date'                    -> use it directly
-#   2. ft5_df has 'game_id' -> merge date from proplay_matches.csv
-#   3. neither -> fall back to a coarse YEAR window (current year only) and
-#      say so loudly, since that's a materially blunter window than 45 days.
-_ft5_dated = None
-if 'date' in ft5_df.columns:
-    _ft5_dated = ft5_df.copy()
-    _ft5_dated['date'] = pd.to_datetime(_ft5_dated['date'], errors='coerce')
-    print("  FT5 ranking window: using ft5_df's own 'date' column")
+# kill_timelines.csv (the proxy FT5 source) doesn't always carry a 'patch'
+# column, so this tries: (1) ft5_df's own 'patch', (2) merge patch from
+# proplay_matches.csv via game_id, (3) unfiltered (all history) with a loud
+# warning, since there's no good coarser patch-based fallback the way "year"
+# worked for the old date-window version.
+_ft5_patched = None
+if 'patch' in ft5_df.columns:
+    _ft5_patched = ft5_df
+    print("  FT5 ranking window: using ft5_df's own 'patch' column")
 elif 'game_id' in ft5_df.columns:
     try:
-        _pp_dates = pd.read_csv(WIN_DATA, usecols=['game_id', 'date'])
-        _pp_dates['date'] = pd.to_datetime(_pp_dates['date'], errors='coerce')
-        _ft5_dated = ft5_df.merge(_pp_dates, on='game_id', how='left')
-        print("  FT5 ranking window: merged 'date' from proplay_matches.csv via game_id")
+        _pp_patch = pd.read_csv(WIN_DATA, usecols=['game_id', 'patch'])
+        _ft5_patched = ft5_df.merge(_pp_patch, on='game_id', how='left')
+        print("  FT5 ranking window: merged 'patch' from proplay_matches.csv via game_id")
     except Exception as e:
-        print(f"  FT5 ranking window: date merge failed ({e}), falling back to year")
+        print(f"  FT5 ranking window: patch merge failed ({e}), falling back to unfiltered")
 
-if _ft5_dated is not None and _ft5_dated['date'].notna().sum() > 20:
-    _ft5_ref = _ft5_dated['date'].max()
-    _ft5_window_start = _ft5_ref - pd.Timedelta(days=RANKING_WINDOW_DAYS)
-    _recent_ft5_df = _ft5_dated[_ft5_dated['date'] >= _ft5_window_start]
-    _window_desc = f"last {RANKING_WINDOW_DAYS}d, ref {_ft5_ref.date()}"
+if _ft5_patched is not None and _ft5_patched['patch'].notna().sum() > 20 and _ranking_patches:
+    _recent_ft5_df = _ft5_patched[_ft5_patched['patch'].isin(_ranking_patches)]
+    _window_desc = f"patches {_ranking_patches}"
+    champ_ft5_ranked_window = {
+        'mode': 'patch', 'patches': [float(p) for p in _ranking_patches],
+        'current_patch': float(CURRENT_PATCH) if CURRENT_PATCH is not None else None,
+        'games': None,  # filled in below
+        'fallback': False,
+    }
 else:
-    # last resort: current year only (much coarser than 45 days, but still
-    # better than all 3+ years of history mashed together)
-    _cur_year = win_df['date'].max().year
-    if 'year' in ft5_df.columns:
-        _recent_ft5_df = ft5_df[ft5_df['year'] == _cur_year]
-    else:
-        _recent_ft5_df = ft5_df
-    _window_desc = f"YEAR FALLBACK ({_cur_year}) -- no usable date, this is coarser than {RANKING_WINDOW_DAYS}d"
-    print(f"  FT5 ranking window: {_window_desc}")
+    _recent_ft5_df = ft5_df
+    _window_desc = "UNFILTERED (no usable patch data) -- all history"
+    champ_ft5_ranked_window = {
+        'mode': 'patch', 'patches': [], 'current_patch': None,
+        'games': None, 'fallback': True, 'fallback_reason': 'no patch data',
+    }
+    print(f"  WARNING  FT5 ranking window: {_window_desc}")
 
 _rf_wins = {}; _rf_games = {}
 for _, row in _recent_ft5_df.iterrows():
@@ -630,8 +653,11 @@ champ_ft5_ranked = sorted(
      for c in _rf_games if _rf_games[c] >= MIN_GAMES_FOR_CHAMP_RANKING],
     key=lambda d: d['win_rate'], reverse=True
 )
+champ_ft5_ranked_window['games'] = int(len(_recent_ft5_df))
 print(f"  FT5 champion ranking ({_window_desc}, {len(_recent_ft5_df)} games in window): "
       f"{len(champ_ft5_ranked)} champs with >={MIN_GAMES_FOR_CHAMP_RANKING} games")
+
+
 
 ft5_team_wins  = {}
 ft5_team_games = {}
@@ -812,6 +838,7 @@ payload = {
     'win_champ_rate':   win_champ_rate,
     'champ_wr_ranked':  champ_wr_ranked,
     'champ_wr_ranked_min_games': MIN_GAMES_FOR_CHAMP_RANKING,
+    'champ_wr_ranked_window': champ_wr_ranked_window,
     'win_h2h':          win_h2h,
     'win_team_recent':  win_team_recent,
     'pc_rate':          pc_rate,
@@ -827,6 +854,7 @@ payload = {
     'ft5_h2h':          ft5_h2h,
     'ft5_team_recent':  ft5_team_recent,
     'champ_ft5_ranked': champ_ft5_ranked,
+    'champ_ft5_ranked_window': champ_ft5_ranked_window,
     'ft5_team_games':   ft5_team_games,
     'team_lineups':     team_lineups,
     'all_teams':        all_teams,
