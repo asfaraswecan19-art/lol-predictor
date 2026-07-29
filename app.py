@@ -414,6 +414,75 @@ _header_slot.markdown(f'''
 </div>
 ''', unsafe_allow_html=True)
 
+# =====================================================================
+# BETTING TIPS TAB — purely additive; does not touch any existing code
+# below. Surfaces league edges and the FT5 red-side signal. Reads straight
+# from the payload, so it refreshes every time update.py runs backtester.py.
+# The champion form guide lives on the MAIN page instead (see below the
+# team/champion input columns) since that's where it's actually useful --
+# comparing to a draft as it's typed in.
+# =====================================================================
+T1_WIN_LG_EDGES   = p_t1.get('backtest_t1_win_league_edges', {}) if p_t1 else {}
+FT5_LG_STATS      = p_t1.get('backtest_ft5_league_stats', {}) if p_t1 else {}
+RED_SIGNAL        = p_t1.get('backtest_red_signal') if p_t1 else None
+BETTABLE_EDGE     = 0.08  # matches the threshold used elsewhere in the pipeline
+
+def _edge_rows_html(stats_dict, get_edge, get_games, bettable=BETTABLE_EDGE):
+    """stats_dict: {league: edge_float} OR {league: {'edge':..,'games':..}}"""
+    rows = sorted(stats_dict.items(), key=lambda kv: -get_edge(kv[1]))
+    out = []
+    for lg, v in rows:
+        e = get_edge(v); g = get_games(v)
+        color = '#40c090' if e >= bettable else ('#c0a040' if e > 0 else '#c05050')
+        tag = ' &middot; bettable' if e >= bettable else ''
+        gtxt = f' &middot; {g}g' if g is not None else ''
+        out.append(
+            f'<div style="display:flex;justify-content:space-between;padding:4px 0;'
+            f'border-bottom:1px solid #1a1e28;font-size:12px;">'
+            f'<span style="color:#8a9ab0;">{lg}{gtxt}</span>'
+            f'<span style="color:{color};font-weight:600;">{e*100:+.1f}%{tag}</span></div>'
+        )
+    return ''.join(out) if out else '<div style="color:#3a4a6a;font-size:11px;">No data yet — run backtester.py.</div>'
+
+tips_tab, = st.tabs(["📋 Betting Tips"])
+with tips_tab:
+    st.markdown(
+        '<div style="color:#3a4a6a;font-size:10.5px;margin-bottom:10px;">'
+        'Live from the last backtester.py run (2026 out-of-sample). Refreshes automatically '
+        'whenever update.py retrains and backtests. "Bettable" = edge ≥ 8%. Champion form guide '
+        'is on the main page, below the draft inputs.</div>',
+        unsafe_allow_html=True)
+
+    tip_col1, tip_col2 = st.columns(2)
+    with tip_col1:
+        st.markdown('<div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;'
+                     'color:#3a4a6a;margin-bottom:4px;">WIN MODEL — LEAGUE EDGES</div>', unsafe_allow_html=True)
+        st.markdown(_edge_rows_html(T1_WIN_LG_EDGES, lambda v: v, lambda v: None), unsafe_allow_html=True)
+    with tip_col2:
+        st.markdown('<div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;'
+                     'color:#3a4a6a;margin-bottom:4px;">FT5 MODEL — LEAGUE EDGES</div>', unsafe_allow_html=True)
+        st.markdown(_edge_rows_html(FT5_LG_STATS, lambda v: v['edge'], lambda v: v['games']), unsafe_allow_html=True)
+
+    st.markdown('<div style="border-top:1px solid #1e2535;margin:14px 0 10px;"></div>', unsafe_allow_html=True)
+
+    if RED_SIGNAL:
+        st.markdown('<div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;'
+                     'color:#3a4a6a;margin-bottom:6px;">FT5 RED-SIDE SIGNAL</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div style="background:#0f1218;border:1px solid #1e2535;border-radius:5px;padding:10px 14px;">'
+            f'When blue confidence is below <b style="color:#e0e0e0;">{RED_SIGNAL["threshold"]*100:.0f}%</b>, '
+            f'red actually wins <b style="color:#e07070;">{RED_SIGNAL["red_acc"]*100:.1f}%</b> of the time '
+            f'({RED_SIGNAL["games"]} games) — vs {RED_SIGNAL["always_blue"]*100:.1f}% if you\'d bet blue anyway. '
+            f'Edge betting red on these games: <b style="color:#40c090;">{RED_SIGNAL["edge_vs_blue"]*100:+.1f}%</b>.'
+            f'</div>', unsafe_allow_html=True)
+        if RED_SIGNAL.get('by_league'):
+            _bl = sorted(RED_SIGNAL['by_league'].items(), key=lambda kv: -kv[1])
+            st.markdown('<div style="margin-top:6px;font-size:11px;color:#6a7a90;">' +
+                       ' &nbsp;|&nbsp; '.join(f'{lg}: {v*100:.0f}%' for lg, v in _bl) +
+                       '</div>', unsafe_allow_html=True)
+    else:
+        st.caption("Red-signal stats need ≥30 qualifying games in the last backtest to display.")
+
 # ── Feature-order safety net ──
 # win_extra / ft5_extra columns below are hand-typed and MUST match the
 # order train_and_save.py used when fitting the model. If they ever drift
@@ -882,6 +951,64 @@ with btn_col2:
             st.session_state[f'blue_p_{pos}'], st.session_state[f'red_p_{pos}'] = \
                 st.session_state[f'red_p_{pos}'], st.session_state[f'blue_p_{pos}']
         st.rerun()
+
+# =====================================================================
+# CHAMPION FORM GUIDE — main-page reference, placed right above the draft
+# inputs so it's usable WHILE typing in a live draft. Two rankings:
+#   - win-model champ rate (which champs win the most games)
+#   - FT5 champ rate (which champs get their team to 5 kills first)
+# Both are raw/unshrunk with a min-games floor (set in train_and_save.py),
+# so every entry shown is backed by a real sample, not a lucky small one.
+# =====================================================================
+CHAMP_WR_RANKED  = p_t1.get('champ_wr_ranked', []) if p_t1 else []
+CHAMP_FT5_RANKED = p_t1.get('champ_ft5_ranked', []) if p_t1 else []
+CHAMP_MIN_GAMES  = p_t1.get('champ_wr_ranked_min_games', 20) if p_t1 else 20
+
+def _champ_rows_html(rows, color):
+    return ''.join(
+        f'<div style="display:flex;justify-content:space-between;padding:3px 0;'
+        f'border-bottom:1px solid #1a1e28;font-size:12px;">'
+        f'<span style="color:#8a9ab0;">{d["champion"]}</span>'
+        f'<span style="color:{color};">{d["win_rate"]*100:.1f}% <span style="color:#3a4a6a;">'
+        f'({d["wins"]}/{d["games"]})</span></span></div>'
+        for d in rows) if rows else '<div style="color:#3a4a6a;font-size:11px;">No data yet.</div>'
+
+with st.expander("📊 Champion Form Guide — compare live draft picks", expanded=False):
+    if not CHAMP_WR_RANKED and not CHAMP_FT5_RANKED:
+        st.caption("No champion ranking yet — run train_and_save.py or train_and_save_B.py "
+                   "from 2026-07-24 or later to populate this.")
+    else:
+        st.markdown(f'<div style="color:#3a4a6a;font-size:10px;margin-bottom:8px;">'
+                     f'Minimum {CHAMP_MIN_GAMES} games to qualify — small samples excluded.</div>',
+                     unsafe_allow_html=True)
+        st.markdown('<div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;'
+                     'color:#3a4a6a;margin:6px 0 4px;">MATCH WIN RATE</div>', unsafe_allow_html=True)
+        wcol1, wcol2 = st.columns(2)
+        with wcol1:
+            st.markdown('<div style="font-size:10px;color:#3a4a6a;margin-bottom:2px;">🔥 Top 10</div>', unsafe_allow_html=True)
+            st.markdown(_champ_rows_html(CHAMP_WR_RANKED[:10], '#40c090'), unsafe_allow_html=True)
+        with wcol2:
+            st.markdown('<div style="font-size:10px;color:#3a4a6a;margin-bottom:2px;">❄️ Bottom 10</div>', unsafe_allow_html=True)
+            st.markdown(_champ_rows_html(list(reversed(CHAMP_WR_RANKED[-10:])), '#c05050'), unsafe_allow_html=True)
+
+        st.markdown('<div style="border-top:1px solid #1e2535;margin:12px 0 8px;"></div>', unsafe_allow_html=True)
+
+        st.markdown('<div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;'
+                     'color:#3a4a6a;margin:6px 0 4px;">FT5 RATE (FIRST TO 5 KILLS)</div>', unsafe_allow_html=True)
+        fcol1, fcol2 = st.columns(2)
+        with fcol1:
+            st.markdown('<div style="font-size:10px;color:#3a4a6a;margin-bottom:2px;">🔥 Top 10</div>', unsafe_allow_html=True)
+            st.markdown(_champ_rows_html(CHAMP_FT5_RANKED[:10], '#60a0f0'), unsafe_allow_html=True)
+        with fcol2:
+            st.markdown('<div style="font-size:10px;color:#3a4a6a;margin-bottom:2px;">❄️ Bottom 10</div>', unsafe_allow_html=True)
+            st.markdown(_champ_rows_html(list(reversed(CHAMP_FT5_RANKED[-10:])), '#c05050'), unsafe_allow_html=True)
+
+        st.markdown(
+            '<div style="margin-top:10px;background:#150f0a;border-left:2px solid #6a5020;'
+            'padding:5px 9px;border-radius:0 4px 4px 0;font-size:10px;color:#8a7050;">'
+            '⚠️ New/unrecognized champions are silently dropped from the model — that draft slot '
+            'contributes nothing, so treat those predictions as lower-confidence than shown.</div>',
+            unsafe_allow_html=True)
 
 col1, col2 = st.columns(2)
 
