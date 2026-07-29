@@ -283,17 +283,40 @@ win_champ_rate = {
     for c in win_champ_games
 }
 
-# ── RAW champion win-rate ranking for the app's Tips tab (see Path A for
-#    the full rationale: unshrunk, min-games floor, not used as a feature) ──
+# ── RAW champion win-rate ranking for the app's Tips tab ──
+# RECENCY-SCOPED to the last RANKING_WINDOW_DAYS days, anchored to the most
+# recent game in the dataset (not calendar "today" -- a few days of data lag
+# shouldn't shrink the window). This is DELIBERATELY a separate count from
+# win_champ_wins/win_champ_games above, which feed win_champ_rate -- an
+# actual MODEL FEATURE that must stay all-time/walk-forward-correct. Scoping
+# THAT to 45 days would change what the model predicts; this only changes
+# what the display list shows. A buff/nerf now shows up in ~45 days of data
+# instead of being diluted by 3+ years of history.
 MIN_GAMES_FOR_CHAMP_RANKING = 10  # lowered from 20 -- catch new/patch-driven picks faster
+RANKING_WINDOW_DAYS = 45
+_rank_ref_date = win_df['date'].max()
+_rank_window_start = _rank_ref_date - pd.Timedelta(days=RANKING_WINDOW_DAYS)
+_recent_win_df = win_df[win_df['date'] >= _rank_window_start]
+
+_rw_wins = {}; _rw_games = {}
+for _, row in _recent_win_df.iterrows():
+    result = row['blue_win']
+    for c in row['blue_picks']:
+        _rw_games[c] = _rw_games.get(c, 0) + 1
+        _rw_wins[c]  = _rw_wins.get(c, 0) + result
+    for c in row['red_picks']:
+        _rw_games[c] = _rw_games.get(c, 0) + 1
+        _rw_wins[c]  = _rw_wins.get(c, 0) + (1 - result)
+
 champ_wr_ranked = sorted(
-    [{'champion': c, 'games': win_champ_games[c],
-      'wins': win_champ_wins[c],
-      'win_rate': win_champ_wins[c] / win_champ_games[c]}
-     for c in win_champ_games if win_champ_games[c] >= MIN_GAMES_FOR_CHAMP_RANKING],
+    [{'champion': c, 'games': _rw_games[c], 'wins': _rw_wins[c],
+      'win_rate': _rw_wins[c] / _rw_games[c]}
+     for c in _rw_games if _rw_games[c] >= MIN_GAMES_FOR_CHAMP_RANKING],
     key=lambda d: d['win_rate'], reverse=True
 )
-print(f"  Champion WR ranking: {len(champ_wr_ranked)} champs with >={MIN_GAMES_FOR_CHAMP_RANKING} games")
+print(f"  Champion WR ranking (last {RANKING_WINDOW_DAYS}d, ref {_rank_ref_date.date()}, "
+      f"{len(_recent_win_df)} games in window): {len(champ_wr_ranked)} champs "
+      f"with >={MIN_GAMES_FOR_CHAMP_RANKING} games")
 role_champ_rate = {
     key: shrunk_rate(role_champ_wins[key], role_champ_games[key],
                      win_champ_rate.get(key[1], 0.5), K_ROLE)
@@ -554,14 +577,61 @@ for _, row in ft5_df.iterrows():
         ft5_champ_wins[c]  = ft5_champ_wins.get(c,  0) + (1 - result)
 champ_aggression = {c: ft5_champ_wins[c] / ft5_champ_games[c] for c in ft5_champ_games}
 
-# ── RAW FT5 champion ranking (see Path A for rationale) ──
+# ── RAW FT5 champion ranking, RECENCY-SCOPED to RANKING_WINDOW_DAYS ──
+# kill_timelines.csv (the proxy FT5 source) doesn't always carry a full date
+# column, so this tries three things in order and logs which one it used:
+#   1. ft5_df already has 'date'                    -> use it directly
+#   2. ft5_df has 'game_id' -> merge date from proplay_matches.csv
+#   3. neither -> fall back to a coarse YEAR window (current year only) and
+#      say so loudly, since that's a materially blunter window than 45 days.
+_ft5_dated = None
+if 'date' in ft5_df.columns:
+    _ft5_dated = ft5_df.copy()
+    _ft5_dated['date'] = pd.to_datetime(_ft5_dated['date'], errors='coerce')
+    print("  FT5 ranking window: using ft5_df's own 'date' column")
+elif 'game_id' in ft5_df.columns:
+    try:
+        _pp_dates = pd.read_csv(WIN_DATA, usecols=['game_id', 'date'])
+        _pp_dates['date'] = pd.to_datetime(_pp_dates['date'], errors='coerce')
+        _ft5_dated = ft5_df.merge(_pp_dates, on='game_id', how='left')
+        print("  FT5 ranking window: merged 'date' from proplay_matches.csv via game_id")
+    except Exception as e:
+        print(f"  FT5 ranking window: date merge failed ({e}), falling back to year")
+
+if _ft5_dated is not None and _ft5_dated['date'].notna().sum() > 20:
+    _ft5_ref = _ft5_dated['date'].max()
+    _ft5_window_start = _ft5_ref - pd.Timedelta(days=RANKING_WINDOW_DAYS)
+    _recent_ft5_df = _ft5_dated[_ft5_dated['date'] >= _ft5_window_start]
+    _window_desc = f"last {RANKING_WINDOW_DAYS}d, ref {_ft5_ref.date()}"
+else:
+    # last resort: current year only (much coarser than 45 days, but still
+    # better than all 3+ years of history mashed together)
+    _cur_year = win_df['date'].max().year
+    if 'year' in ft5_df.columns:
+        _recent_ft5_df = ft5_df[ft5_df['year'] == _cur_year]
+    else:
+        _recent_ft5_df = ft5_df
+    _window_desc = f"YEAR FALLBACK ({_cur_year}) -- no usable date, this is coarser than {RANKING_WINDOW_DAYS}d"
+    print(f"  FT5 ranking window: {_window_desc}")
+
+_rf_wins = {}; _rf_games = {}
+for _, row in _recent_ft5_df.iterrows():
+    result = row['first_to_five_binary']
+    for c in row['blue_picks']:
+        _rf_games[c] = _rf_games.get(c, 0) + 1
+        _rf_wins[c]  = _rf_wins.get(c, 0) + result
+    for c in row['red_picks']:
+        _rf_games[c] = _rf_games.get(c, 0) + 1
+        _rf_wins[c]  = _rf_wins.get(c, 0) + (1 - result)
+
 champ_ft5_ranked = sorted(
-    [{'champion': c, 'games': ft5_champ_games[c], 'wins': ft5_champ_wins[c],
-      'win_rate': champ_aggression[c]}
-     for c in ft5_champ_games if ft5_champ_games[c] >= MIN_GAMES_FOR_CHAMP_RANKING],
+    [{'champion': c, 'games': _rf_games[c], 'wins': _rf_wins[c],
+      'win_rate': _rf_wins[c] / _rf_games[c]}
+     for c in _rf_games if _rf_games[c] >= MIN_GAMES_FOR_CHAMP_RANKING],
     key=lambda d: d['win_rate'], reverse=True
 )
-print(f"  FT5 champion ranking: {len(champ_ft5_ranked)} champs with >={MIN_GAMES_FOR_CHAMP_RANKING} games")
+print(f"  FT5 champion ranking ({_window_desc}, {len(_recent_ft5_df)} games in window): "
+      f"{len(champ_ft5_ranked)} champs with >={MIN_GAMES_FOR_CHAMP_RANKING} games")
 
 ft5_team_wins  = {}
 ft5_team_games = {}
