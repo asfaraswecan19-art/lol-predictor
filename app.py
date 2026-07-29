@@ -776,7 +776,6 @@ def log_to_sheets(row_data, sheet_id):
     except Exception as e:
         return False, f"{type(e).__name__}: {e}"
 
-
 def fetch_tracker_history(conf, conf_level, sheet_id):
     """Returns (history: dict|None, error: str|None)."""
     try:
