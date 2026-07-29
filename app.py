@@ -963,6 +963,31 @@ with btn_col2:
 CHAMP_WR_RANKED  = p_t1.get('champ_wr_ranked', []) if p_t1 else []
 CHAMP_FT5_RANKED = p_t1.get('champ_ft5_ranked', []) if p_t1 else []
 CHAMP_MIN_GAMES  = p_t1.get('champ_wr_ranked_min_games', 20) if p_t1 else 20
+CHAMP_WR_WINDOW  = p_t1.get('champ_wr_ranked_window') if p_t1 else None
+CHAMP_FT5_WINDOW = p_t1.get('champ_ft5_ranked_window') if p_t1 else None
+
+def _fmt_patch(p):
+    """16.09 -> '16.09' not '16.9' -- keep the zero-padded minor version visible."""
+    return f"{p:.2f}" if p is not None else "?"
+
+def _window_label(win):
+    """Format a champ_*_ranked_window dict for display. Handles the current
+    patch-based scheme (mode='patch') and stays backward-compatible with the
+    older day-window scheme (a payload trained before this switch)."""
+    if not win:
+        return "Data range unknown (older payload)."
+    if win.get('mode') == 'patch':
+        pts = win.get('patches') or []
+        if not pts:
+            reason = win.get('fallback_reason', 'no patch data')
+            return f"⚠️ ALL HISTORY — {reason}, not scoped to recent patches · {win.get('games','?')} games"
+        pstr = ' + '.join(_fmt_patch(p) for p in pts)
+        return f"Patch {pstr} · {win.get('games','?')} games"
+    # older day-window payload
+    if win.get('fallback'):
+        return (f"⚠️ Full year {win.get('fallback_year','?')} (no per-game date data available) "
+                f"· {win.get('games','?')} games")
+    return f"{win.get('start','?')} → {win.get('end','?')} ({win.get('days','?')}d) · {win.get('games','?')} games"
 
 def _champ_rows_html(rows, color):
     return ''.join(
@@ -983,6 +1008,8 @@ with st.expander("📊 Champion Form Guide — compare live draft picks", expand
                      unsafe_allow_html=True)
         st.markdown('<div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;'
                      'color:#3a4a6a;margin:6px 0 4px;">MATCH WIN RATE</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="color:#5a6a80;font-size:9.5px;margin-bottom:4px;">'
+                     f'📅 {_window_label(CHAMP_WR_WINDOW)}</div>', unsafe_allow_html=True)
         wcol1, wcol2 = st.columns(2)
         with wcol1:
             st.markdown('<div style="font-size:10px;color:#3a4a6a;margin-bottom:2px;">🔥 Top 10</div>', unsafe_allow_html=True)
@@ -995,6 +1022,8 @@ with st.expander("📊 Champion Form Guide — compare live draft picks", expand
 
         st.markdown('<div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;'
                      'color:#3a4a6a;margin:6px 0 4px;">FT5 RATE (FIRST TO 5 KILLS)</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="color:#5a6a80;font-size:9.5px;margin-bottom:4px;">'
+                     f'📅 {_window_label(CHAMP_FT5_WINDOW)}</div>', unsafe_allow_html=True)
         fcol1, fcol2 = st.columns(2)
         with fcol1:
             st.markdown('<div style="font-size:10px;color:#3a4a6a;margin-bottom:2px;">🔥 Top 10</div>', unsafe_allow_html=True)
