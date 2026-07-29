@@ -944,6 +944,46 @@ else:
     role_champ_rate_t2 = {k: shrunk_rate(rc_wins_t2[k], rc_games_t2[k], 0.5, K_ROLE)
                           for k in rc_games_t2}
 
+    # ── T2 champion win-rate ranking (Champion Form Guide), same treatment
+    #    as T1: raw/unshrunk, min-games floor, current+previous patch. This
+    #    is a SEPARATE count from cw2/cg2 below, which feed the win-model
+    #    FEATURE (bcw/rcw) and must stay all-time/walk-forward-correct.
+    _all_patches_t2 = sorted(df_t2['patch'].dropna().unique()) if 'patch' in df_t2.columns else []
+    CURRENT_PATCH_T2 = _all_patches_t2[-1] if _all_patches_t2 else None
+    PREV_PATCH_T2    = _all_patches_t2[-2] if len(_all_patches_t2) >= 2 else CURRENT_PATCH_T2
+    _ranking_patches_t2 = sorted({p for p in (CURRENT_PATCH_T2, PREV_PATCH_T2) if p is not None})
+    if _ranking_patches_t2:
+        _recent_win_df_t2 = df_t2[df_t2['patch'].isin(_ranking_patches_t2)]
+    else:
+        print("  WARNING: no 'patch' column in T2 data -- champion ranking uses ALL data (unscoped).")
+        _recent_win_df_t2 = df_t2
+
+    _rw_wins_t2 = {}; _rw_games_t2 = {}
+    for _, row in _recent_win_df_t2.iterrows():
+        result = row['blue_win']
+        for c in row['blue_picks']:
+            _rw_games_t2[c] = _rw_games_t2.get(c, 0) + 1
+            _rw_wins_t2[c]  = _rw_wins_t2.get(c, 0) + result
+        for c in row['red_picks']:
+            _rw_games_t2[c] = _rw_games_t2.get(c, 0) + 1
+            _rw_wins_t2[c]  = _rw_wins_t2.get(c, 0) + (1 - result)
+
+    t2_champ_wr_ranked = sorted(
+        [{'champion': c, 'games': _rw_games_t2[c], 'wins': _rw_wins_t2[c],
+          'win_rate': _rw_wins_t2[c] / _rw_games_t2[c]}
+         for c in _rw_games_t2 if _rw_games_t2[c] >= MIN_GAMES_FOR_CHAMP_RANKING],
+        key=lambda d: d['win_rate'], reverse=True
+    )
+    print(f"  T2 Champion WR ranking (patches {_ranking_patches_t2}, "
+          f"{len(_recent_win_df_t2)} games in window): {len(t2_champ_wr_ranked)} champs "
+          f"with >={MIN_GAMES_FOR_CHAMP_RANKING} games")
+    t2_champ_wr_ranked_window = {
+        'mode': 'patch',
+        'patches': [float(p) for p in _ranking_patches_t2],
+        'current_patch': float(CURRENT_PATCH_T2) if CURRENT_PATCH_T2 is not None else None,
+        'games': int(len(_recent_win_df_t2)),
+    }
+
     # Build win features for T2
     tw2={}; tg2={}; cw2={}; cg2={}; h2h2={}; tr2={}; pw2={}; pg2={}
     t2_win_rows = []
@@ -1158,6 +1198,60 @@ else:
         t2_champ_aggression = {c: ce_agg[c]/ce_agg_g[c] for c in ce_agg_g if ce_agg_g[c]>0}
         t2_team_early_rate  = {t: te_early[t]/te_early_g[t] for t in te_early_g if te_early_g[t]>0}
         t2_team_kill_speed  = {t: f_speed[t]/f_speed_c[t] for t in f_speed_c if f_speed_c[t]>0}
+
+        # ── T2 FT5 champion ranking, patch-scoped like T1. Same fallback
+        #    chain: ft5_t2's own 'patch' column, else merge from T2_DATA via
+        #    game_id, else unfiltered with a loud warning.
+        _ft5_t2_patched = None
+        if 'patch' in ft5_t2.columns:
+            _ft5_t2_patched = ft5_t2
+            print("  T2 FT5 ranking window: using ft5_t2's own 'patch' column")
+        elif 'game_id' in ft5_t2.columns:
+            try:
+                _pp_patch_t2 = pd.read_csv(T2_DATA, usecols=['game_id', 'patch'])
+                _ft5_t2_patched = ft5_t2.merge(_pp_patch_t2, on='game_id', how='left')
+                print("  T2 FT5 ranking window: merged 'patch' from proplay_matches_t2.csv via game_id")
+            except Exception as e:
+                print(f"  T2 FT5 ranking window: patch merge failed ({e}), falling back to unfiltered")
+
+        if (_ft5_t2_patched is not None and _ft5_t2_patched['patch'].notna().sum() > 20
+                and _ranking_patches_t2):
+            _recent_ft5_df_t2 = _ft5_t2_patched[_ft5_t2_patched['patch'].isin(_ranking_patches_t2)]
+            _window_desc_t2 = f"patches {_ranking_patches_t2}"
+            t2_champ_ft5_ranked_window = {
+                'mode': 'patch', 'patches': [float(p) for p in _ranking_patches_t2],
+                'current_patch': float(CURRENT_PATCH_T2) if CURRENT_PATCH_T2 is not None else None,
+                'games': None, 'fallback': False,
+            }
+        else:
+            _recent_ft5_df_t2 = ft5_t2
+            _window_desc_t2 = "UNFILTERED (no usable patch data) -- all history"
+            t2_champ_ft5_ranked_window = {
+                'mode': 'patch', 'patches': [], 'current_patch': None,
+                'games': None, 'fallback': True, 'fallback_reason': 'no patch data',
+            }
+            print(f"  WARNING  T2 FT5 ranking window: {_window_desc_t2}")
+
+        _rf_wins_t2 = {}; _rf_games_t2 = {}
+        for _, row in _recent_ft5_df_t2.iterrows():
+            result = row['first_to_five_binary']
+            for c in row['blue_picks']:
+                _rf_games_t2[c] = _rf_games_t2.get(c, 0) + 1
+                _rf_wins_t2[c]  = _rf_wins_t2.get(c, 0) + result
+            for c in row['red_picks']:
+                _rf_games_t2[c] = _rf_games_t2.get(c, 0) + 1
+                _rf_wins_t2[c]  = _rf_wins_t2.get(c, 0) + (1 - result)
+
+        t2_champ_ft5_ranked = sorted(
+            [{'champion': c, 'games': _rf_games_t2[c], 'wins': _rf_wins_t2[c],
+              'win_rate': _rf_wins_t2[c] / _rf_games_t2[c]}
+             for c in _rf_games_t2 if _rf_games_t2[c] >= MIN_GAMES_FOR_CHAMP_RANKING],
+            key=lambda d: d['win_rate'], reverse=True
+        )
+        t2_champ_ft5_ranked_window['games'] = int(len(_recent_ft5_df_t2))
+        print(f"  T2 FT5 champion ranking ({_window_desc_t2}, {len(_recent_ft5_df_t2)} games in window): "
+              f"{len(t2_champ_ft5_ranked)} champs with >={MIN_GAMES_FOR_CHAMP_RANKING} games")
+
         t2_ft5_available = True
 
     # ── Data-driven fallback defaults + validation metrics for T2 ──
@@ -1204,6 +1298,9 @@ else:
         'global_avg_winrate':     t2_global_avg_winrate,
         'gridsearch_val_win_acc': t2_gridsearch_val_win_acc,
         'gridsearch_val_win_auc': float(t2_best_auc) if t2_best_auc else None,
+        'champ_wr_ranked':  t2_champ_wr_ranked,
+        'champ_wr_ranked_min_games': MIN_GAMES_FOR_CHAMP_RANKING,
+        'champ_wr_ranked_window': t2_champ_wr_ranked_window,
     }
 
     # Add FT5 to T2 payload if available
@@ -1217,6 +1314,8 @@ else:
             'ft5_h2h':          f_h2h,
             'ft5_team_recent':  f_recent,
             'ft5_team_games':   te_early_g,
+            'champ_ft5_ranked': t2_champ_ft5_ranked,
+            'champ_ft5_ranked_window': t2_champ_ft5_ranked_window,
         })
         print(f"  ✅ T2 FT5 added to payload")
 
