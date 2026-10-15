@@ -145,6 +145,9 @@ LEAGUE_MAP = {
     'EDward Gaming': 'LPL', 'Ninjas in Pyjamas': 'LPL', 'Team WE': 'LPL',
     'ThunderTalk Gaming': 'LPL', 'LGD Gaming': 'LPL', 'LNG Esports': 'LPL',
     'Oh My God': 'LPL', 'Ultra Prime': 'LPL',
+    'CTBC Flying Oyster': 'LCP', 'Deep Cross Gaming': 'LCP', 'DetonatioN FocusMe': 'LCP',
+    'Fukuoka SoftBank HAWKS gaming': 'LCP', 'GAM Esports': 'LCP', 'Ground Zero Gaming': 'LCP',
+    'MVK Esports': 'LCP', 'Team Secret Whales': 'LCP',
     'FunPlus Phoenix': 'LPL', 'Rare Atom': 'LPL', 'Wolves Esports': 'LPL',
 }
 
@@ -320,7 +323,7 @@ st.markdown('<span style="color:#3a6a20;font-size:0.75rem;font-family:monospace;
 st.markdown('<div style="border-top:1px solid #1e2535;margin:8px 0 6px;"></div>', unsafe_allow_html=True)
 selected_tier = st.radio(
     "LEAGUE TIER",
-    ["🏆 Tier 1 (LCK / LPL / LEC / LCS / CBLOL)", "🥈 Tier 2 (LCKC / LFL / EM / PRM)", "🔀 KeSPA (mixed rosters)"],
+    ["🏆 Tier 1 (LCK / LPL / LEC / LCS / CBLOL / LCP)", "🥈 Tier 2 (LCKC / LFL / EM / PRM)", "🔀 KeSPA (mixed rosters)"],
     horizontal=True,
     help="Select Tier 2 for Challenger/regional leagues. KeSPA = mixed main/academy rosters (once-a-year event)."
 )
