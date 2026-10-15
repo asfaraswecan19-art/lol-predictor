@@ -138,13 +138,17 @@ try:
     # NOTE: we PARSE the list out of the source rather than `import`-ing it --
     # build_dataset.py runs its build on import (no __main__ guard), so importing
     # would kick off a full rebuild just to read a constant.
-    tier1 = ['LCK','LPL','LEC','LCS','CBLOL','MSI','WLDs','EWC','LTA N','LTA S','LTA','FST']
+    tier1 = ['LCK','LPL','LEC','LCS','CBLOL','MSI','WLDs','EWC','LTA N','LTA S','LTA','FST','DCGI','LCP']
     try:
         import ast, re as _re
         _src = open('build_dataset.py', encoding='utf-8').read()
         _m = _re.search(r'TARGET_LEAGUES_T1\s*=\s*(\[[^\]]*\])', _src)
         if _m:
             tier1 = ast.literal_eval(_m.group(1))
+        # Demacia Cup Invitational (Oracle's Elixir code 'DCGI'). Always include it
+        # for the "latest match" display even if build_dataset.py doesn't list it yet.
+        if 'DCGI' not in tier1:
+            tier1.append('DCGI')
     except Exception:
         pass  # fall back to the inline list above
     if 'league' in df.columns and 'date' in df.columns:

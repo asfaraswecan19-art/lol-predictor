@@ -25,6 +25,9 @@ warnings.filterwarnings('ignore')
 import pandas as pd
 import numpy as np
 import pickle
+from patch_utils import (PATCH_AWARE, PATCH_DECAY, TARGET_PATCH_OVERRIDE, RANK_PATCH_SPAN,
+                         MIN_RANK_GAMES, MAX_RANK_SPAN, patch_index, target_patch_index,
+                         PatchAwareRates)
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.calibration import CalibratedClassifierCV
@@ -108,7 +111,7 @@ def shrunk_rate(wins, games, prior, k):
     no discontinuity, and no separate 0.5-fallback logic needed downstream."""
     return (wins + k * prior) / (games + k)
 POSITIONS         = ['top', 'jng', 'mid', 'adc', 'sup']
-TARGET_LEAGUES    = ['LCK','LPL','LEC','LCS','CBLOL','MSI','WLDs','EWC','LTA N','LTA S','LTA','FST']
+TARGET_LEAGUES    = ['LCK','LPL','LEC','LCS','CBLOL','MSI','WLDs','EWC','LTA N','LTA S','LTA','FST','DCGI','LCP']
 
 def cap_h2h(rate):
     return max(1 - H2H_CAP, min(H2H_CAP, rate))
@@ -310,6 +313,37 @@ _all_patches = sorted(win_df['patch'].dropna().unique()) if 'patch' in win_df.co
 CURRENT_PATCH = _all_patches[-1] if _all_patches else None
 PREV_PATCH    = _all_patches[-2] if len(_all_patches) >= 2 else CURRENT_PATCH
 _ranking_patches = sorted({p for p in (CURRENT_PATCH, PREV_PATCH) if p is not None})
+
+# PATCH-AWARE window: "current + previous LABEL in the data" is wrong when one
+# event carries a label nobody else has (DCGI on 16.18 while domestic leagues
+# were still on 16.17, with Worlds on 16.20). Instead take every patch within
+# RANK_PATCH_SPAN real patches of the TARGET patch, widening until the window
+# holds enough games.
+TARGET_PATCH_IDX = None
+if PATCH_AWARE and _all_patches:
+    _pidx_by_patch = {p: patch_index(p) for p in _all_patches}
+    TARGET_PATCH_IDX = target_patch_index(_pidx_by_patch.values())
+    _span = RANK_PATCH_SPAN
+    while True:
+        _cand = sorted(p for p, i in _pidx_by_patch.items()
+                       if i is not None and TARGET_PATCH_IDX - i <= _span)
+        _n = int(win_df['patch'].isin(_cand).sum()) if _cand else 0
+        if _n >= MIN_RANK_GAMES or _span >= MAX_RANK_SPAN:
+            break
+        _span += 1
+    if _cand:
+        _ranking_patches = _cand
+    print(f"\n  PATCH-AWARE: target patch idx {TARGET_PATCH_IDX} "
+          f"(override {TARGET_PATCH_OVERRIDE}), decay {PATCH_DECAY}/patch, window span {_span}")
+    print("  Patch age in the T1 data (weight = how much a game on that patch counts "
+          "toward the live payload):")
+    for _p in _all_patches[-6:]:
+        _i = _pidx_by_patch[_p]
+        _g = int((win_df['patch'] == _p).sum())
+        _lg = ','.join(sorted(win_df.loc[win_df['patch'] == _p, 'tournament'].astype(str).unique())[:6]) \
+              if 'tournament' in win_df.columns else ''
+        print(f"    {_p:.2f}  {TARGET_PATCH_IDX - _i} patch(es) behind  "
+              f"weight {PATCH_DECAY ** (TARGET_PATCH_IDX - _i):.2f}  {_g} games  {_lg}")
 if _ranking_patches:
     _recent_win_df = win_df[win_df['patch'].isin(_ranking_patches)]
 else:
@@ -339,6 +373,7 @@ champ_wr_ranked_window = {
     'mode': 'patch',
     'patches': [float(p) for p in _ranking_patches],
     'current_patch': float(CURRENT_PATCH) if CURRENT_PATCH is not None else None,
+    'target_patch_idx': TARGET_PATCH_IDX,
     'games': int(len(_recent_win_df)),
 }
 role_champ_rate = {
@@ -434,6 +469,41 @@ win_df['red_pc_avg']  = win_df.apply(
     lambda row: get_blended_avg(row['red_players'], row['red_picks'],
                                 pc_rate, role_champ_rate), axis=1)
 win_df['pc_avg_diff'] = win_df['blue_pc_avg'] - win_df['red_pc_avg']
+
+# =================================================================
+# PATCH-AWARE CHAMPION FEATURES (replaces the static all-time rates above)
+# =================================================================
+# The three columns/dicts above are all-time and STATIC: every training row sees
+# rates that include its own result and games from every patch equally. When
+# PATCH_AWARE, rebuild them walk-forward with patch-distance decay (see
+# patch_utils.py), so each game is described by what was known, patch-weighted,
+# BEFORE it was played -- and the live payload dicts are rebuilt as seen from
+# the target patch, so a stale-patch event (DCGI on 16.18 vs Worlds 16.20)
+# counts for less than fresh data.
+if PATCH_AWARE:
+    print("\n  Rebuilding champion features walk-forward, patch-decayed...")
+    _par = PatchAwareRates(PATCH_DECAY, K_CHAMP, K_ROLE, K_PC, PC_WEIGHT, RC_WEIGHT, POSITIONS)
+    _pis = ([patch_index(p) for p in win_df['patch']]
+            if 'patch' in win_df.columns else [None] * len(win_df))
+    _bw, _rw_, _bpc, _rpc = [], [], [], []
+    for _pi, (_, _r) in zip(_pis, win_df.iterrows()):
+        _bc, _bp = _par.side_features(_r['blue_players'], _r['blue_picks'], _pi)
+        _rc, _rp = _par.side_features(_r['red_players'],  _r['red_picks'],  _pi)
+        _bw.append(_bc); _rw_.append(_rc); _bpc.append(_bp); _rpc.append(_rp)
+        _res = _r['blue_win']
+        _par.update(_r['blue_players'], _r['blue_picks'], _res,     _pi)
+        _par.update(_r['red_players'],  _r['red_picks'],  1 - _res, _pi)
+    win_df['blue_avg_winrate'] = _bw
+    win_df['red_avg_winrate']  = _rw_
+    win_df['winrate_diff']     = win_df['blue_avg_winrate'] - win_df['red_avg_winrate']
+    win_df['blue_pc_avg']      = _bpc
+    win_df['red_pc_avg']       = _rpc
+    win_df['pc_avg_diff']      = win_df['blue_pc_avg'] - win_df['red_pc_avg']
+    # Live dicts: state after the last game, read from the TARGET patch.
+    _pc_pos_clean = {(k[0], k[1]): v for k, v in pc_pos.items()}
+    win_champ_rate, role_champ_rate, pc_rate = _par.export(TARGET_PATCH_IDX, _pc_pos_clean)
+    print(f"  Patch-aware live rates: {len(win_champ_rate)} champs, "
+          f"{len(role_champ_rate)} role-champ, {len(pc_rate)} player-champ")
 
 win_mlb = MultiLabelBinarizer()
 win_mlb.fit(win_df['blue_picks'] + win_df['red_picks'])
@@ -839,6 +909,9 @@ payload = {
     'champ_wr_ranked':  champ_wr_ranked,
     'champ_wr_ranked_min_games': MIN_GAMES_FOR_CHAMP_RANKING,
     'champ_wr_ranked_window': champ_wr_ranked_window,
+    'patch_aware':      bool(PATCH_AWARE),
+    'patch_decay':      float(PATCH_DECAY),
+    'patch_target_idx': TARGET_PATCH_IDX,
     'win_h2h':          win_h2h,
     'win_team_recent':  win_team_recent,
     'pc_rate':          pc_rate,

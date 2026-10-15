@@ -55,12 +55,12 @@ EARLY_STOP_KILLS    = 10
 #
 # MAINTENANCE: tuned to CURRENTLY-ACTIVE league names. If a league rebrands or a
 # new target league appears, add its exact API name here or it's silently
-# skipped. Deliberately excluded: LCP (not modeled); LTA/LTA N/LTA S (defunct
+# skipped. Deliberately excluded: LTA/LTA N/LTA S (defunct
 # LCS+CBLOL merger, historical games already in proplay); EWC (not needed);
 # NACL/LJL/TCL/VCS/etc. (not modeled).
 TIER1_LEAGUES = {
     # ── T1 ──
-    'LCK', 'LPL', 'LEC', 'LCS', 'CBLOL', 'MSI', 'Worlds', 'First Stand',
+    'LCK', 'LPL', 'LEC', 'LCS', 'CBLOL', 'LCP', 'MSI', 'Worlds', 'First Stand',
     # ── T2 ──
     'LCK Challengers', 'La Ligue Française', 'EMEA Masters', 'Prime League',
 }

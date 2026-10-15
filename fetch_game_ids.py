@@ -31,7 +31,7 @@ SLEEP = 0.25  # gentler than schedule because per-call is cheap
 # MAINTENANCE: this is tuned to CURRENTLY-ACTIVE league names. If a league
 # rebrands or a new target league appears, add its exact API name here or it
 # will be silently skipped. Deliberately excluded:
-#   - LCP: not modeled (bridge was correctly dropping it)
+#   - (LCP is now INCLUDED -- it was added to the tier 1 model.)
 #   - LTA / LTA N / LTA S: defunct (was an LCS+CBLOL merger, no longer runs;
 #     historical games already live in proplay data, nothing new to scrape --
 #     LCS and CBLOL are back to being their own leagues)
@@ -39,7 +39,7 @@ SLEEP = 0.25  # gentler than schedule because per-call is cheap
 #   - NACL, LJL, TCL, VCS, Arabian League, etc.: not modeled
 TIER1_LEAGUES = {
     # ── T1 ──
-    'LCK', 'LPL', 'LEC', 'LCS', 'CBLOL', 'MSI', 'Worlds', 'First Stand',
+    'LCK', 'LPL', 'LEC', 'LCS', 'CBLOL', 'LCP', 'MSI', 'Worlds', 'First Stand',
     # ── T2 ──
     'LCK Challengers', 'La Ligue Française', 'EMEA Masters', 'Prime League',
 }
